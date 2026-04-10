@@ -446,8 +446,36 @@ COLOR_SEQ = [t["accent"], t["green"], t["red"], "#F59E0B", "#8B5CF6", "#EC4899"]
 SPREADSHEET_ID = "1GbB23Qzf_lhErGiWCcAJz1Yqk_UUloNatWgBpXilGkc"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
+def classify_channel_trial(val):
+    if pd.isna(val) or str(val).strip() in ["", "nan", "None"]:
+        return "サポートサイト"
+    v = str(val).strip()
+    if v == "110":
+        return "公式サイト"
+    return f"代理店{v}"
+
+def calc_mrr(orders_df):
+    """各注文の金額を有効期間の月数で按分し、月別に集計する"""
+    df = orders_df.dropna(subset=["有効期_開始", "有効期_終了"]).copy()
+    df["金额"] = pd.to_numeric(df["金额"], errors="coerce")
+    df = df[(df["金额"] > 0) & (df["有効期_終了"] > df["有効期_開始"])]
+    if df.empty:
+        return pd.DataFrame(columns=["month", "mrr"])
+    rows = []
+    for _, row in df.iterrows():
+        daily = row["金额"] / (row["有効期_終了"] - row["有効期_開始"]).days
+        cur = row["有効期_開始"].to_period("M").to_timestamp()
+        while cur <= row["有効期_終了"]:
+            me = cur + pd.offsets.MonthEnd(0)
+            days = (min(me, row["有効期_終了"]) - max(cur, row["有効期_開始"])).days + 1
+            if days > 0:
+                rows.append({"month": cur, "mrr": daily * days})
+            cur += pd.DateOffset(months=1)
+    return pd.DataFrame(rows).groupby("month")["mrr"].sum().reset_index() if rows else pd.DataFrame(columns=["month", "mrr"])
+
 @st.cache_data(ttl=600)
 def load_data():
+    """データ取得 + 全静的前処理をキャッシュ（10分間）"""
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             json.loads(st.secrets["gcp_service_account"]), scopes=SCOPES
@@ -456,110 +484,130 @@ def load_data():
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SPREADSHEET_ID)
+
+    # --- 生データ取得 ---
     df_orders = pd.DataFrame(sh.get_worksheet(0).get_all_records())
-    df_ads = pd.DataFrame(sh.worksheet("google_ads_data").get_all_records())
-    df_ga4 = pd.DataFrame(sh.worksheet("ga4_data").get_all_records())
+    df_ads    = pd.DataFrame(sh.worksheet("google_ads_data").get_all_records())
+    df_ga4    = pd.DataFrame(sh.worksheet("ga4_data").get_all_records())
     df_trials = pd.DataFrame(sh.worksheet("trials").get_all_records())
-    return df_orders, df_ads, df_ga4, df_trials
+
+    # --- df_orders 前処理 ---
+    df_orders["有効期_開始"] = df_orders["有效期"].apply(parse_validity_start)
+    df_orders["有効期_終了"] = df_orders["有效期"].apply(parse_end_date)
+    df_orders = df_orders.dropna(subset=["有効期_開始"])
+    df_orders["下单时间"] = pd.to_datetime(df_orders["下单时间"], errors="coerce", format="mixed")
+    df_orders["tier"]         = df_orders.apply(get_order_tier, axis=1)
+    df_orders["period"]       = df_orders.apply(get_order_period, axis=1)
+    df_orders["order_category"] = df_orders.apply(get_order_category, axis=1)
+
+    # --- df_trials 前処理 + チャネル紐づけ ---
+    df_trials["创建时间"] = pd.to_datetime(df_trials["创建时间"], errors="coerce", format="mixed")
+    df_trials = df_trials.dropna(subset=["创建时间"])
+    if "代理商" in df_trials.columns:
+        df_trials["channel"] = df_trials["代理商"].apply(classify_channel_trial)
+    else:
+        df_trials["channel"] = "サポートサイト"
+    _trial_ch_map = df_trials.groupby("邮箱")["channel"].first()
+    df_orders["channel"] = df_orders["用户邮箱"].map(_trial_ch_map).fillna("サポートサイト")
+
+    # --- df_ads 前処理 ---
+    df_ads["date"] = pd.to_datetime(df_ads["date"], errors="coerce")
+    df_ads = df_ads.dropna(subset=["date"])
+
+    # --- df_ga4 前処理 ---
+    df_ga4["date"] = pd.to_datetime(df_ga4["date"], errors="coerce")
+    df_ga4 = df_ga4.dropna(subset=["date"])
+    df_ga4_lp    = df_ga4[df_ga4["page_type"] == "LP"].copy()
+    df_ga4_other = df_ga4[df_ga4["page_type"] == "Other"].copy()
+
+    # --- ユーザーカテゴリマップ ---
+    _ubiz = df_orders.groupby("用户邮箱")["业务名"].apply(set).reset_index()
+    _ubiz["category"] = _ubiz["业务名"].apply(lambda x:
+        "コンボ"  if any("テレビ"  in str(s) for s in x) else
+        ("モバイル" if any("モバイル" in str(s) for s in x) else "その他"))
+    email_to_cat = _ubiz.set_index("用户邮箱")["category"]
+
+    # --- ユーザー別最終有効期終了日（VPN除外）---
+    _user_validity_end = df_orders[df_orders["tier"] != "VPN"].groupby("用户邮箱")["有効期_終了"].max()
+
+    # --- MRR ---
+    df_mrr = calc_mrr(df_orders)
+
+    # --- LTV・ユーザー集計 ---
+    df_ltv = df_orders.copy()
+    df_ltv["金额"] = pd.to_numeric(df_ltv["金额"], errors="coerce")
+    df_ltv["order_date"] = pd.to_datetime(df_ltv["下单时间"], errors="coerce")
+    df_ltv = df_ltv[(df_ltv["tier"].notna()) & (df_ltv["tier"] != "VPN") & (df_ltv["金额"] > 0)]
+    df_ltv["validity_end"] = df_ltv["有效期"].apply(parse_end_date)
+
+    user_ltv = df_ltv.groupby("用户邮箱").agg(
+        ltv=("金额", "sum"),
+        order_count=("金额", "count"),
+        first_order=("order_date", "min"),
+        last_order=("order_date", "max"),
+        last_validity_end=("validity_end", "max"),
+        renewal_count=("类型", lambda x: (x == "续费").sum()),
+    ).reset_index()
+    user_ltv["tenure_months"] = (user_ltv["last_order"] - user_ltv["first_order"]).dt.days / 30.44
+    user_ltv["is_repeater"]   = user_ltv["order_count"] >= 2
+    user_ltv["is_churned"]    = user_ltv["last_validity_end"] < pd.Timestamp.now()
+    latest_order = df_ltv.sort_values("order_date").groupby("用户邮箱").last()
+    user_ltv["tier"]   = user_ltv["用户邮箱"].map(latest_order["tier"])
+    user_ltv["period"] = user_ltv["用户邮箱"].map(latest_order["period"])
+    user_ltv["category"] = user_ltv["用户邮箱"].map(email_to_cat).fillna("不明")
+    user_ltv["full_plan"] = user_ltv.apply(lambda r:
+        f'{r["category"]}・{r["tier"]}（{r["period"]}）'
+        if r["category"] in ["モバイル", "コンボ"] and pd.notna(r["tier"]) and r["tier"] in ["ベーシック", "プレミアム"] and pd.notna(r["period"]) and r["period"] in ["1ヶ月", "12ヶ月"]
+        else "不明", axis=1)
+
+    df_ltv["user_category"] = df_ltv["用户邮箱"].map(email_to_cat).fillna("不明")
+    df_ltv["order_full_plan"] = df_ltv.apply(lambda r:
+        f'{r["user_category"]}・{r["tier"]}（{r["period"]}）'
+        if r["user_category"] in ["モバイル", "コンボ"] and r["tier"] in ["ベーシック", "プレミアム"] and r["period"] in ["1ヶ月", "12ヶ月"]
+        else "不明", axis=1)
+
+    plan_order_counts = {}
+    for pn in ["モバイル・ベーシック（1ヶ月）", "モバイル・ベーシック（12ヶ月）",
+               "モバイル・プレミアム（1ヶ月）", "モバイル・プレミアム（12ヶ月）",
+               "コンボ・ベーシック（1ヶ月）", "コンボ・ベーシック（12ヶ月）",
+               "コンボ・プレミアム（1ヶ月）", "コンボ・プレミアム（12ヶ月）"]:
+        po = df_ltv[df_ltv["order_full_plan"] == pn].copy()
+        po["order_day"] = po["order_date"].dt.date
+        pd_dedup = po.groupby(["用户邮箱", "order_day"]).agg(金额=("金额", "sum"), order_date=("order_date", "first")).reset_index()
+        poc = pd_dedup.groupby("用户邮箱").agg(order_count=("金额", "count"), ltv=("金额", "sum"), first_order=("order_date", "min"), last_order=("order_date", "max")).reset_index()
+        poc["order_count"]    = poc["order_count"].astype(int)
+        poc["tenure_months"]  = (poc["last_order"] - poc["first_order"]).dt.days / 30.44
+        poc["is_repeater"]    = poc["order_count"] >= 2
+        plan_order_counts[pn] = poc
+
+    avg_ltv       = user_ltv["ltv"].mean()    if len(user_ltv) > 0 else 0
+    median_ltv    = user_ltv["ltv"].median()  if len(user_ltv) > 0 else 0
+    avg_orders    = user_ltv["order_count"].mean() if len(user_ltv) > 0 else 0
+    repeater_rate = (user_ltv["is_repeater"].mean() * 100) if len(user_ltv) > 0 else 0
+    avg_tenure    = user_ltv[user_ltv["is_repeater"]]["tenure_months"].mean() if user_ltv["is_repeater"].any() else 0
+    churn_rate    = (user_ltv["is_churned"].mean() * 100) if len(user_ltv) > 0 else 0
+
+    _churn_base = user_ltv[["用户邮箱", "last_validity_end", "tenure_months", "ltv", "full_plan", "tier", "category"]].copy()
+    _country_map = df_orders.groupby("用户邮箱")["用户城市"].last()
+    _churn_base["country"] = _churn_base["用户邮箱"].map(_country_map).apply(lambda x: clean_country(str(x)) if pd.notna(x) else "不明")
+    _churn_base["channel"] = _churn_base["用户邮箱"].map(df_orders.groupby("用户邮箱")["channel"].first()).fillna("不明")
+
+    return (df_orders, df_ads, df_ga4, df_ga4_lp, df_ga4_other, df_trials,
+            email_to_cat, _user_validity_end, df_mrr,
+            user_ltv, df_ltv, plan_order_counts,
+            avg_ltv, median_ltv, avg_orders, repeater_rate, avg_tenure, churn_rate,
+            _churn_base)
 
 try:
-    df_orders, df_ads, df_ga4, df_trials = load_data()
+    (df_orders, df_ads, df_ga4, df_ga4_lp, df_ga4_other, df_trials,
+     email_to_cat, _user_validity_end, df_mrr,
+     user_ltv, df_ltv, plan_order_counts,
+     avg_ltv, median_ltv, avg_orders, repeater_rate, avg_tenure, churn_rate,
+     _churn_base) = load_data()
 except Exception as e:
     st.error(f"データ取得に失敗しました: {e}")
     st.info("credentials.json の配置と、スプレッドシートの共有設定を確認してください。")
     st.stop()
-
-# ============================
-# データ前処理
-# ============================
-df_orders["有効期_開始"] = df_orders["有效期"].apply(parse_validity_start)
-df_orders["有効期_終了"] = df_orders["有效期"].apply(parse_end_date)
-df_orders = df_orders.dropna(subset=["有効期_開始"])
-df_orders["下单时间"] = pd.to_datetime(df_orders["下单时间"], errors="coerce", format="mixed")
-df_orders["tier"] = df_orders.apply(get_order_tier, axis=1)
-df_orders["period"] = df_orders.apply(get_order_period, axis=1)
-df_orders["order_category"] = df_orders.apply(get_order_category, axis=1)
-
-# ordersからユーザー別カテゴリ判定（业务名ベース、部分一致）
-_user_biz_from_orders = df_orders.groupby("用户邮箱")["业务名"].apply(set).reset_index()
-_user_biz_from_orders["category"] = _user_biz_from_orders["业务名"].apply(lambda x:
-    "コンボ" if any("テレビ" in str(s) for s in x)
-    else ("モバイル" if any("モバイル" in str(s) for s in x) else "その他"))
-email_to_cat = _user_biz_from_orders.set_index("用户邮箱")["category"]
-
-# ordersからユーザー別の最終有効期終了日（VPN除外）
-_user_validity_end = df_orders[df_orders["tier"] != "VPN"].groupby("用户邮箱")["有効期_終了"].max()
-
-# MRR（月次按分売上）の算出
-def calc_mrr(orders_df):
-    """各注文の金額を有効期間の月数で按分し、月別に集計する"""
-    rows = []
-    for _, row in orders_df.iterrows():
-        amount = pd.to_numeric(row["金额"], errors="coerce")
-        start = row["有効期_開始"]
-        end = row["有効期_終了"]
-        if pd.isna(amount) or amount <= 0 or pd.isna(start) or pd.isna(end):
-            continue
-        # 有効期間の月数を算出（日数ベースで按分）
-        total_days = (end - start).days
-        if total_days <= 0:
-            continue
-        daily_amount = amount / total_days
-        # 月初〜月末ごとに按分
-        current = start.to_period("M").to_timestamp()
-        while current <= end:
-            month_end = (current + pd.offsets.MonthEnd(0))
-            period_start = max(current, start)
-            period_end = min(month_end, end)
-            days_in_month = (period_end - period_start).days + 1
-            if days_in_month > 0:
-                rows.append({"month": current, "mrr": daily_amount * days_in_month})
-            current = current + pd.DateOffset(months=1)
-    if not rows:
-        return pd.DataFrame(columns=["month", "mrr"])
-    mrr_df = pd.DataFrame(rows).groupby("month")["mrr"].sum().reset_index()
-    return mrr_df
-
-df_mrr = calc_mrr(df_orders)
-
-df_ads["date"] = pd.to_datetime(df_ads["date"], errors="coerce")
-df_ads = df_ads.dropna(subset=["date"])
-
-df_ga4["date"] = pd.to_datetime(df_ga4["date"], errors="coerce")
-df_ga4 = df_ga4.dropna(subset=["date"])
-df_ga4_lp = df_ga4[df_ga4["page_type"] == "LP"]
-df_ga4_other = df_ga4[df_ga4["page_type"] == "Other"]
-
-df_trials["创建时间"] = pd.to_datetime(df_trials["创建时间"], errors="coerce", format="mixed")
-df_trials = df_trials.dropna(subset=["创建时间"])
-
-# チャネル識別（代理商/代理店番号ベース）
-def classify_channel_trial(val):
-    """trialsの代理商列からチャネルを判定"""
-    if pd.isna(val) or str(val).strip() in ["", "nan", "None"]:
-        return "サポートサイト"
-    v = str(val).strip()
-    if v == "110":
-        return "公式サイト"
-    return f"代理店{v}"
-
-def classify_channel_order(val):
-    """ordersの代理店番号列からチャネルを判定"""
-    if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0"]:
-        return "サポートサイト"
-    v = str(val).strip()
-    if v == "110":
-        return "公式サイト"
-    return f"代理店{v}"
-
-if "代理商" in df_trials.columns:
-    df_trials["channel"] = df_trials["代理商"].apply(classify_channel_trial)
-else:
-    df_trials["channel"] = "サポートサイト"
-
-# ordersにはチャネル列がないため、trialsの代理商をメール経由で紐づけ
-_trial_channel_map = df_trials.groupby("邮箱")["channel"].first()
-df_orders["channel"] = df_orders["用户邮箱"].map(_trial_channel_map).fillna("サポートサイト")
 
 
 # ============================
@@ -701,90 +749,7 @@ def pct_delta(current, prev, lower_is_better=False, is_rate=False):
     except Exception:
         return None, None
 
-# ============================
-# 全期間データ前処理（LTV等）
-# ============================
-df_ltv = df_orders.copy()
-df_ltv["金额"] = pd.to_numeric(df_ltv["金额"], errors="coerce")
-df_ltv["order_date"] = pd.to_datetime(df_ltv["下单时间"], errors="coerce")
-df_ltv["tier"] = df_ltv.apply(get_order_tier, axis=1)
-
-_total_orders = len(df_ltv)
-_unique_all = df_ltv["用户邮箱"].nunique()
-_after_tier = df_ltv[df_ltv["tier"].notna()]["用户邮箱"].nunique()
-_after_vpn = df_ltv[(df_ltv["tier"].notna()) & (df_ltv["tier"] != "VPN")]["用户邮箱"].nunique()
-_after_amount = df_ltv[(df_ltv["tier"].notna()) & (df_ltv["tier"] != "VPN") & (df_ltv["金额"] > 0)]["用户邮箱"].nunique()
-_orders_active_now = (_user_validity_end >= pd.Timestamp.now()).sum()
-_orders_active_month = (_user_validity_end >= ts_start).sum()
-
-df_ltv = df_ltv[(df_ltv["tier"].notna()) & (df_ltv["tier"] != "VPN") & (df_ltv["金额"] > 0)]
-df_ltv["validity_end"] = df_ltv["有效期"].apply(parse_end_date)
-df_ltv["period"] = df_ltv.apply(get_order_period, axis=1)
-
-user_ltv = df_ltv.groupby("用户邮箱").agg(
-    ltv=("金额", "sum"),
-    order_count=("金额", "count"),
-    first_order=("order_date", "min"),
-    last_order=("order_date", "max"),
-    last_validity_end=("validity_end", "max"),
-    renewal_count=("类型", lambda x: (x == "续费").sum()),
-).reset_index()
-user_ltv["tenure_months"] = (user_ltv["last_order"] - user_ltv["first_order"]).dt.days / 30.44
-user_ltv["is_repeater"] = user_ltv["order_count"] >= 2
-user_ltv["is_churned"] = user_ltv["last_validity_end"] < pd.Timestamp.now()
-
-latest_order = df_ltv.sort_values("order_date").groupby("用户邮箱").last()
-user_ltv["tier"] = user_ltv["用户邮箱"].map(latest_order["tier"])
-user_ltv["period"] = user_ltv["用户邮箱"].map(latest_order["period"])
-
-df_ltv["user_category"] = df_ltv["用户邮箱"].map(email_to_cat).fillna("不明")
-df_ltv["order_full_plan"] = df_ltv.apply(lambda r:
-    f'{r["user_category"]}・{r["tier"]}（{r["period"]}）'
-    if r["user_category"] in ["モバイル", "コンボ"] and r["tier"] in ["ベーシック", "プレミアム"] and r["period"] in ["1ヶ月", "12ヶ月"]
-    else "不明", axis=1)
-
-plan_order_counts = {}
-for pn in ["モバイル・ベーシック（1ヶ月）", "モバイル・ベーシック（12ヶ月）",
-           "モバイル・プレミアム（1ヶ月）", "モバイル・プレミアム（12ヶ月）",
-           "コンボ・ベーシック（1ヶ月）", "コンボ・ベーシック（12ヶ月）",
-           "コンボ・プレミアム（1ヶ月）", "コンボ・プレミアム（12ヶ月）"]:
-    plan_orders = df_ltv[df_ltv["order_full_plan"] == pn].copy()
-    plan_orders["order_day"] = plan_orders["order_date"].dt.date
-    plan_dedup = plan_orders.groupby(["用户邮箱", "order_day"]).agg(
-        金额=("金额", "sum"), order_date=("order_date", "first"),
-    ).reset_index()
-    plan_order_counts[pn] = plan_dedup.groupby("用户邮箱").agg(
-        order_count=("金额", "count"), ltv=("金额", "sum"),
-        first_order=("order_date", "min"), last_order=("order_date", "max"),
-    ).reset_index()
-    poc = plan_order_counts[pn]
-    poc["order_count"] = poc["order_count"].astype(int)
-    poc["tenure_months"] = (poc["last_order"] - poc["first_order"]).dt.days / 30.44
-    poc["is_repeater"] = poc["order_count"] >= 2
-
-user_ltv["category"] = user_ltv["用户邮箱"].map(email_to_cat).fillna("不明")
-user_ltv["full_plan"] = user_ltv.apply(lambda r:
-    f'{r["category"]}・{r["tier"]}（{r["period"]}）'
-    if r["category"] in ["モバイル", "コンボ"] and pd.notna(r["tier"]) and r["tier"] in ["ベーシック", "プレミアム"] and pd.notna(r["period"]) and r["period"] in ["1ヶ月", "12ヶ月"]
-    else "不明", axis=1)
-
-avg_ltv = user_ltv["ltv"].mean() if len(user_ltv) > 0 else 0
-median_ltv = user_ltv["ltv"].median() if len(user_ltv) > 0 else 0
-avg_orders = user_ltv["order_count"].mean() if len(user_ltv) > 0 else 0
-repeater_rate = (user_ltv["is_repeater"].mean() * 100) if len(user_ltv) > 0 else 0
-repeaters_df = user_ltv[user_ltv["is_repeater"]]
-avg_tenure = repeaters_df["tenure_months"].mean() if len(repeaters_df) > 0 else 0
-churn_rate = (user_ltv["is_churned"].mean() * 100) if len(user_ltv) > 0 else 0
 total_active = (_user_validity_end >= ts_start).sum()
-
-# 解約分析用ベースデータ（全期間、VPN除外済みのuser_ltvを利用）
-_churn_base = user_ltv[["用户邮箱", "last_validity_end", "tenure_months", "ltv", "full_plan", "tier", "category"]].copy()
-_churn_base["country"] = _churn_base["用户邮箱"].map(
-    df_orders.groupby("用户邮箱")["用户城市"].last()
-).apply(lambda x: clean_country(str(x)) if pd.notna(x) else "不明")
-_churn_base["channel"] = _churn_base["用户邮箱"].map(
-    df_orders.groupby("用户邮箱")["channel"].first()
-).fillna("不明")
 
 # ============================
 # ヘッダー
@@ -1101,20 +1066,13 @@ filtered_orders_by_order_date = df_orders[(df_orders["下单时间"] >= ts_start
 trial_lookup = df_trials.groupby("邮箱")["创建时间"].first()
 
 def calc_conversions(orders_df, trial_lkp):
-    n, emails = 0, set()
-    for _, order in orders_df.iterrows():
-        email = order["用户邮箱"]
-        order_date = order["下单时间"]
-        if pd.isna(order_date) or email in emails:
-            continue
-        if email in trial_lkp.index:
-            trial_date = trial_lkp[email]
-            if isinstance(trial_date, pd.Series):
-                trial_date = trial_date.iloc[0]
-            if pd.notna(trial_date) and (order_date - pd.Timedelta(days=30)) <= trial_date <= order_date:
-                n += 1
-                emails.add(email)
-    return n
+    """お試し登録から30日以内に初回課金したユーザー数（vectorized版）"""
+    df = orders_df[["用户邮箱", "下单时间"]].dropna(subset=["下单时间"]).copy()
+    df = df.drop_duplicates(subset=["用户邮箱"], keep="first")
+    df["trial_date"] = df["用户邮箱"].map(trial_lkp)
+    df = df[df["trial_date"].notna()]
+    mask = (df["trial_date"] >= df["下单时间"] - pd.Timedelta(days=30)) & (df["trial_date"] <= df["下单时间"])
+    return int(mask.sum())
 
 new_conversions = calc_conversions(filtered_orders_by_order_date, trial_lookup)
 paid_unique = len(filtered_orders_by_order_date["用户邮箱"].unique())
