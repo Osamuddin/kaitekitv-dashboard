@@ -365,42 +365,63 @@ st.markdown(f"""
     .js-plotly-plot .plotly .main-svg {{ background: transparent !important; }}
 
     /* スマホ対応: 横スクロール防止 */
-    html, body {{
-        overflow-x: hidden;
-        max-width: 100vw;
-    }}
-    .stApp {{
-        overflow-x: hidden;
-        max-width: 100vw;
+    html, body, .stApp {{
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
     }}
     .block-container {{
-        overflow-x: hidden;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        overflow-x: hidden !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
         max-width: 100% !important;
     }}
+    /* カラムの折り返し */
     [data-testid="stHorizontalBlock"] {{
-        flex-wrap: wrap;
+        flex-wrap: wrap !important;
+        gap: 0.5rem;
     }}
-    .kpi-card {{
-        min-width: 0;
-        word-break: break-word;
+    /* Plotly グラフのはみ出し防止 */
+    .js-plotly-plot, .stPlotlyChart {{
+        max-width: 100% !important;
+        overflow: hidden !important;
     }}
+    .js-plotly-plot .plotly {{
+        max-width: 100% !important;
+    }}
+    /* テーブルのはみ出し防止 */
     table {{
         display: block;
+        max-width: 100%;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }}
+    /* KPIカード */
+    .kpi-card {{
+        min-width: 0;
+        word-break: break-word;
+        box-sizing: border-box;
+    }}
     @media (max-width: 768px) {{
         .block-container {{
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }}
+        /* スマホでカラムを1列に */
+        [data-testid="column"] {{
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
         }}
         .kpi-value {{
-            font-size: 22px !important;
+            font-size: 20px !important;
         }}
         .section-title {{
-            font-size: 16px !important;
+            font-size: 15px !important;
+        }}
+        /* グラフ強制縮小 */
+        .js-plotly-plot svg {{
+            max-width: 100% !important;
+            height: auto !important;
         }}
     }}
 </style>
