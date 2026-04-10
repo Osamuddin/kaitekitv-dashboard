@@ -364,64 +364,82 @@ st.markdown(f"""
     /* Plotly チャート背景 */
     .js-plotly-plot .plotly .main-svg {{ background: transparent !important; }}
 
-    /* スマホ対応: 横スクロール防止 */
-    html, body, .stApp {{
+    /* ===== スマホ横スクロール防止（包括的） ===== */
+    /* 全要素の基本 */
+    *, *::before, *::after {{
+        box-sizing: border-box !important;
+    }}
+    /* ドキュメントルート */
+    html {{
         overflow-x: hidden !important;
-        max-width: 100vw !important;
+        width: 100% !important;
+    }}
+    body {{
+        overflow-x: hidden !important;
+        width: 100% !important;
+        position: relative !important;
+    }}
+    /* Streamlit アプリコンテナ群 */
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stBottom"],
+    .main, .block-container {{
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+        width: 100% !important;
     }}
     .block-container {{
-        overflow-x: hidden !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
-        max-width: 100% !important;
     }}
-    /* カラムの折り返し */
+    /* カラムコンテナ */
     [data-testid="stHorizontalBlock"] {{
+        overflow-x: hidden !important;
         flex-wrap: wrap !important;
-        gap: 0.5rem;
     }}
-    /* Plotly グラフのはみ出し防止 */
-    .js-plotly-plot, .stPlotlyChart {{
+    [data-testid="column"] {{
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }}
+    /* Plotly */
+    .js-plotly-plot, .stPlotlyChart,
+    [data-testid="stPlotlyChart"] {{
         max-width: 100% !important;
         overflow: hidden !important;
     }}
-    .js-plotly-plot .plotly {{
+    .js-plotly-plot svg {{
         max-width: 100% !important;
     }}
-    /* テーブルのはみ出し防止 */
+    /* HTML テーブル */
     table {{
         display: block;
         max-width: 100%;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }}
-    /* KPIカード */
-    .kpi-card {{
-        min-width: 0;
+    /* カスタム HTML 要素 */
+    .kpi-card, .section-card, .sub-title {{
+        max-width: 100% !important;
+        overflow: hidden !important;
         word-break: break-word;
-        box-sizing: border-box;
     }}
+    /* スマホ専用 */
     @media (max-width: 768px) {{
         .block-container {{
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }}
-        /* スマホでカラムを1列に */
         [data-testid="column"] {{
             width: 100% !important;
             flex: 1 1 100% !important;
-            min-width: 100% !important;
         }}
         .kpi-value {{
             font-size: 20px !important;
         }}
         .section-title {{
             font-size: 15px !important;
-        }}
-        /* グラフ強制縮小 */
-        .js-plotly-plot svg {{
-            max-width: 100% !important;
-            height: auto !important;
         }}
     }}
 </style>
