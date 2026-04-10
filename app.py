@@ -409,8 +409,20 @@ st.markdown(f"""
         max-width: 100% !important;
         overflow: hidden !important;
     }}
+    .js-plotly-plot .svg-container {{
+        max-width: 100% !important;
+        width: 100% !important;
+    }}
     .js-plotly-plot svg {{
         max-width: 100% !important;
+        width: 100% !important;
+    }}
+    /* DataFrame */
+    [data-testid="stDataFrameResizable"],
+    [data-testid="stDataFrame"] > div {{
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow-x: auto !important;
     }}
     /* HTML テーブル */
     table {{
