@@ -1,6 +1,7 @@
-streamlit
+streamlit==1.41.0
 gspread
 google-auth
 plotly
-pandas
+pandas==2.2.3
 python-dateutil
+pyarrow==17.0.0
