@@ -1807,7 +1807,7 @@ if len(_map_df) > 0:
         geo=dict(bgcolor="rgba(0,0,0,0)"),
         height=620,
     )
-    st.plotly_chart(fig_map, use_container_width=True, theme=None)
+    st.plotly_chart(fig_map, use_container_width=True, theme=None, config={"scrollZoom": False})
 else:
     st.info("地図表示に必要な国コードデータがありません")
 
