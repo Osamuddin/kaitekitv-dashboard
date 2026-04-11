@@ -1731,12 +1731,19 @@ if len(_map_df) > 0:
 else:
     st.info("地図表示に必要な国コードデータがありません")
 
-# 表（2列）
-_half = len(active_by_country) // 2 + len(active_by_country) % 2
-col1, col2 = st.columns(2)
-with col1:
-    styled_table(active_by_country.iloc[:_half].reset_index(drop=True), t)
-with col2:
-    styled_table(active_by_country.iloc[_half:].reset_index(drop=True), t)
+# 表（4列）
+_n = len(active_by_country)
+_q = _n // 4
+_r = _n % 4
+_splits = []
+_start = 0
+for i in range(4):
+    _end = _start + _q + (1 if i < _r else 0)
+    _splits.append(active_by_country.iloc[_start:_end].reset_index(drop=True))
+    _start = _end
+col1, col2, col3, col4 = st.columns(4)
+for col, df_slice in zip([col1, col2, col3, col4], _splits):
+    with col:
+        styled_table(df_slice, t)
 
 st.markdown('</div>', unsafe_allow_html=True)
