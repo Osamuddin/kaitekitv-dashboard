@@ -1565,7 +1565,7 @@ _active_users_list["plan"] = _active_users_list.apply(lambda r:
 
 plan_counts = _active_users_list["plan"].value_counts().reset_index()
 plan_counts.columns = ["プラン", "ユーザー数"]
-plan_order_list = ["コンボ・プレミアム", "コンボ・ベーシック", "モバイル・プレミアム", "モバイル・ベーシック", "コンボ・不明", "モバイル・不明"]
+plan_order_list = ["モバイル・ベーシック", "モバイル・プレミアム", "コンボ・ベーシック", "コンボ・プレミアム", "コンボ・不明", "モバイル・不明"]
 plan_counts["sort"] = plan_counts["プラン"].apply(lambda x: plan_order_list.index(x) if x in plan_order_list else 99)
 plan_counts = plan_counts.sort_values("sort").drop(columns="sort")
 
