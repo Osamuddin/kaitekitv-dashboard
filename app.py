@@ -203,16 +203,15 @@ st.markdown(f"""
     }}
     .kpi-help .kpi-tooltip {{
         visibility: hidden; opacity: 0;
-        position: absolute; bottom: 130%; left: 50%;
-        transform: translateX(-50%);
+        position: fixed;
         width: 260px; padding: 12px 14px;
         background: {t["card_bg"]}; color: {t["text"]};
         border: 1px solid {t["border"]};
         border-radius: 8px; font-size: 12px;
         line-height: 1.6; font-weight: 400;
         box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        z-index: 1000; white-space: normal;
-        transition: opacity 0.2s;
+        z-index: 99999; white-space: normal;
+        transition: opacity 0.15s;
         pointer-events: none;
     }}
     .kpi-help:hover .kpi-tooltip {{
@@ -809,6 +808,36 @@ def pct_delta(current, prev, lower_is_better=False, is_rate=False):
             return f"{'+'if pct > 0 else ''}{pct:.1f}%", direction
     except Exception:
         return None, None
+
+# ツールチップをマウス位置に追従させるJS（overflow: hidden の親に影響されない）
+st.markdown("""
+<script>
+(function() {
+    function initTooltips() {
+        document.querySelectorAll('.kpi-help').forEach(function(el) {
+            if (el.dataset.tooltipInit) return;
+            el.dataset.tooltipInit = '1';
+            var tip = el.querySelector('.kpi-tooltip');
+            if (!tip) return;
+            el.addEventListener('mousemove', function(e) {
+                var x = e.clientX;
+                var y = e.clientY;
+                var tw = 260;
+                var left = x - tw / 2;
+                if (left < 8) left = 8;
+                if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+                tip.style.left = left + 'px';
+                tip.style.top = (y - 12) + 'px';
+                tip.style.transform = 'translateY(-100%)';
+            });
+        });
+    }
+    var observer = new MutationObserver(initTooltips);
+    observer.observe(document.body, { childList: true, subtree: true });
+    initTooltips();
+})();
+</script>
+""", unsafe_allow_html=True)
 
 total_active = (_user_validity_end >= ts_start).sum()
 
