@@ -809,7 +809,7 @@ def pct_delta(current, prev, lower_is_better=False, is_rate=False):
     except Exception:
         return None, None
 
-# ツールチップをマウス位置に追従させるJS（overflow: hidden の親に影響されない）
+# ツールチップを?ボタンの真上に固定表示するJS
 st.markdown("""
 <script>
 (function() {
@@ -819,15 +819,14 @@ st.markdown("""
             el.dataset.tooltipInit = '1';
             var tip = el.querySelector('.kpi-tooltip');
             if (!tip) return;
-            el.addEventListener('mousemove', function(e) {
-                var x = e.clientX;
-                var y = e.clientY;
+            el.addEventListener('mouseenter', function() {
+                var rect = el.getBoundingClientRect();
                 var tw = 260;
-                var left = x - tw / 2;
+                var left = rect.left + rect.width / 2 - tw / 2;
                 if (left < 8) left = 8;
                 if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
                 tip.style.left = left + 'px';
-                tip.style.top = (y - 12) + 'px';
+                tip.style.top = (rect.top - 8) + 'px';
                 tip.style.transform = 'translateY(-100%)';
             });
         });
