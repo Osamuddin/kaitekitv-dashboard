@@ -1674,62 +1674,10 @@ else:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================
-# セクション: チャネル別転換・継続分析
+# セクション: プラン別継続サマリー
 # ============================
-st.markdown('<div class="section-card"><div class="section-title">チャネル別転換・継続分析</div>', unsafe_allow_html=True)
-st.markdown('<div style="font-size:12px;color:{};margin-bottom:12px;">「ハマる人」をどのチャネルが連れてきているか ― 転換率×継続月数で分析</div>'.format(t["text_muted"]), unsafe_allow_html=True)
+st.markdown('<div class="section-card"><div class="section-title">プラン別継続サマリー</div>', unsafe_allow_html=True)
 
-# チャネル別お試し登録数（全期間）
-_trial_by_ch = df_trials.groupby("channel")["邮箱"].nunique().reset_index()
-_trial_by_ch.columns = ["チャネル", "お試し登録数"]
-
-# チャネル別有料ユーザー数・LTV・継続（user_ltvにchannel付与）
-_ulv = user_ltv.copy()
-_ulv["channel"] = _ulv["用户邮箱"].map(df_orders.groupby("用户邮箱")["channel"].first()).fillna("サポートサイト")
-
-_paid_by_ch = _ulv.groupby("channel").agg(
-    有料ユーザー数=("用户邮箱", "nunique"),
-    平均LTV=("ltv", "mean"),
-    リピート率=("is_repeater", "mean"),
-).reset_index()
-_paid_by_ch.columns = ["チャネル", "有料ユーザー数", "平均LTV", "リピート率"]
-
-_tenure_by_ch = _ulv[_ulv["is_repeater"]].groupby("channel")["tenure_months"].mean().reset_index()
-_tenure_by_ch.columns = ["チャネル", "平均継続月数"]
-
-_ch_conv = _trial_by_ch.merge(_paid_by_ch, on="チャネル", how="outer").merge(_tenure_by_ch, on="チャネル", how="left")
-_ch_conv["お試し登録数"] = _ch_conv["お試し登録数"].fillna(0).astype(int)
-_ch_conv["有料ユーザー数"] = _ch_conv["有料ユーザー数"].fillna(0).astype(int)
-_ch_conv["転換率(%)"] = (_ch_conv["有料ユーザー数"] / _ch_conv["お試し登録数"].replace(0, pd.NA) * 100).round(1)
-_ch_conv["平均LTV"] = _ch_conv["平均LTV"].round(1)
-_ch_conv["リピート率(%)"] = (_ch_conv["リピート率"] * 100).round(1)
-_ch_conv["平均継続月数"] = _ch_conv["平均継続月数"].round(1)
-_ch_conv = _ch_conv.drop(columns=["リピート率"]).sort_values("有料ユーザー数", ascending=False)
-_ch_conv_display = _ch_conv[["チャネル", "お試し登録数", "有料ユーザー数", "転換率(%)", "平均LTV", "平均継続月数", "リピート率(%)"]].reset_index(drop=True)
-
-col1, col2 = st.columns([1, 2])
-with col1:
-    styled_table(_ch_conv_display, t)
-with col2:
-    _scatter_df = _ch_conv.dropna(subset=["転換率(%)", "平均継続月数"])
-    if len(_scatter_df) > 0:
-        fig_scatter = px.scatter(
-            _scatter_df,
-            x="転換率(%)", y="平均継続月数",
-            size="有料ユーザー数", color="チャネル",
-            text="チャネル",
-            title="転換率 vs 平均継続月数（バブル＝有料ユーザー数）",
-            color_discrete_sequence=COLOR_SEQ,
-            size_max=60,
-        )
-        fig_scatter.update_traces(textposition="top center")
-        fig_scatter.update_layout(**PLOT_LAYOUT)
-        st.plotly_chart(fig_scatter, use_container_width=True, theme=None)
-
-# プラン別サマリー
-st.markdown('<div class="sub-title">プラン別 転換・継続サマリー</div>', unsafe_allow_html=True)
-
-# プラン別の転換率は算出できないため、LTV・継続・リピートのみ
 if plan_ltv_list:
     df_plan_summary = pd.DataFrame(plan_ltv_list)[["プラン", "ユーザー数", "平均LTV", "継続月数", "リピート率"]].copy()
     df_plan_summary = df_plan_summary.sort_values("ユーザー数", ascending=False).reset_index(drop=True)
