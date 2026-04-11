@@ -373,11 +373,12 @@ st.markdown(f"""
     html {{
         overflow-x: hidden !important;
         width: 100% !important;
+                height: 100% !important;
     }}
     body {{
         overflow-x: hidden !important;
         width: 100% !important;
-        position: relative !important;
+                height: 100% !important;
     }}
     /* Streamlit アプリコンテナ群 */
     .stApp,
