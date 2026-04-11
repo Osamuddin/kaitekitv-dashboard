@@ -201,9 +201,12 @@ st.markdown(f"""
         font-size: 11px; font-weight: 700; cursor: help;
         flex-shrink: 0;
     }}
-    .kpi-help .kpi-tooltip {{
-        visibility: hidden; opacity: 0;
+    /* .kpi-tooltip は非表示のデータ格納用（JSがbodyに複製して表示） */
+    .kpi-help .kpi-tooltip {{ display: none !important; }}
+    /* グローバルツールチップ（body直下、JSで制御） */
+    #kpi-global-tip {{
         position: fixed;
+        display: none;
         width: 260px; padding: 12px 14px;
         background: {t["card_bg"]}; color: {t["text"]};
         border: 1px solid {t["border"]};
@@ -211,17 +214,14 @@ st.markdown(f"""
         line-height: 1.6; font-weight: 400;
         box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         z-index: 99999; white-space: normal;
-        transition: opacity 0.15s;
         pointer-events: none;
+        transition: opacity 0.15s;
     }}
-    .kpi-help:hover .kpi-tooltip {{
-        visibility: visible; opacity: 1;
-    }}
-    .kpi-tooltip strong {{
+    #kpi-global-tip strong {{
         color: {t["accent"]}; display: block;
         margin-bottom: 4px; font-size: 13px;
     }}
-    .kpi-tooltip .formula {{
+    #kpi-global-tip .formula {{
         background: {t["bg"]}; padding: 4px 8px;
         border-radius: 4px; font-family: monospace;
         font-size: 11px; margin: 4px 0;
@@ -809,34 +809,53 @@ def pct_delta(current, prev, lower_is_better=False, is_rate=False):
     except Exception:
         return None, None
 
-# ツールチップを?ボタンの真上に固定表示するJS
-st.markdown("""
+# components.html でJSを実行（window.parent.document で親ページを操作）
+import streamlit.components.v1 as components
+components.html("""
 <script>
 (function() {
-    function initTooltips() {
-        document.querySelectorAll('.kpi-help').forEach(function(el) {
-            if (el.dataset.tooltipInit) return;
-            el.dataset.tooltipInit = '1';
-            var tip = el.querySelector('.kpi-tooltip');
-            if (!tip) return;
+    var doc = window.parent.document;
+
+    // グローバルツールチップをbody直下に作成（overflow: hiddenの影響を受けない）
+    var tip = doc.getElementById('kpi-global-tip');
+    if (!tip) {
+        tip = doc.createElement('div');
+        tip.id = 'kpi-global-tip';
+        doc.body.appendChild(tip);
+    }
+
+    function attach() {
+        doc.querySelectorAll('.kpi-help').forEach(function(el) {
+            if (el.dataset.tipInit) return;
+            el.dataset.tipInit = '1';
+            var inner = el.querySelector('.kpi-tooltip');
+            if (!inner) return;
+
             el.addEventListener('mouseenter', function() {
+                tip.innerHTML = inner.innerHTML;
                 var rect = el.getBoundingClientRect();
                 var tw = 260;
                 var left = rect.left + rect.width / 2 - tw / 2;
                 if (left < 8) left = 8;
-                if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+                if (left + tw > window.parent.innerWidth - 8)
+                    left = window.parent.innerWidth - tw - 8;
                 tip.style.left = left + 'px';
                 tip.style.top = (rect.top - 8) + 'px';
                 tip.style.transform = 'translateY(-100%)';
+                tip.style.display = 'block';
+            });
+
+            el.addEventListener('mouseleave', function() {
+                tip.style.display = 'none';
             });
         });
     }
-    var observer = new MutationObserver(initTooltips);
-    observer.observe(document.body, { childList: true, subtree: true });
-    initTooltips();
+
+    new MutationObserver(attach).observe(doc.body, { childList: true, subtree: true });
+    attach();
 })();
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
 total_active = (_user_validity_end >= ts_start).sum()
 
