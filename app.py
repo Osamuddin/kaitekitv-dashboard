@@ -520,12 +520,15 @@ def load_data():
     sh = gc.open_by_key(SPREADSHEET_ID)
 
     # --- スプレッドシート最終更新日時（Drive API）---
-    from googleapiclient.discovery import build
-    drive_service = build("drive", "v3", credentials=creds)
-    file_meta = drive_service.files().get(
-        fileId=SPREADSHEET_ID, fields="modifiedTime"
-    ).execute()
-    sheet_modified_time = pd.Timestamp(file_meta["modifiedTime"]).tz_convert("Asia/Tokyo")
+    try:
+        from googleapiclient.discovery import build
+        drive_service = build("drive", "v3", credentials=creds)
+        file_meta = drive_service.files().get(
+            fileId=SPREADSHEET_ID, fields="modifiedTime"
+        ).execute()
+        sheet_modified_time = pd.Timestamp(file_meta["modifiedTime"]).tz_convert("Asia/Tokyo")
+    except Exception:
+        sheet_modified_time = None
 
     # --- 生データ取得 ---
     df_orders = pd.DataFrame(sh.get_worksheet(0).get_all_records())
@@ -726,7 +729,7 @@ with st.sidebar:
     st.markdown("---")
     ads_last = max(df_ads["date"].max(), df_ga4["date"].max())
     ads_last_str = pd.Timestamp(ads_last).strftime("%Y/%m/%d") if pd.notna(ads_last) else "不明"
-    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M")
+    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M") if sheet_modified_time else "（Drive API要有効化）"
     st.markdown(
         f'<div style="font-size:11px;color:{t["text_muted"]};line-height:1.8;">'
         f'📊 広告・Analytics<br>'
