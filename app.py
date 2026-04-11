@@ -402,7 +402,7 @@ st.markdown(f"""
     }}
     [data-testid="column"] {{
         min-width: 0 !important;
-        overflow: hidden !important;
+        overflow: visible !important;
     }}
     /* Plotly */
     .js-plotly-plot, .stPlotlyChart,
@@ -433,7 +433,12 @@ st.markdown(f"""
         -webkit-overflow-scrolling: touch;
     }}
     /* カスタム HTML 要素 */
-    .kpi-card, .section-card, .sub-title {{
+    .kpi-card {{
+        max-width: 100% !important;
+        overflow: visible !important;
+        word-break: break-word;
+    }}
+    .section-card, .sub-title {{
         max-width: 100% !important;
         overflow: hidden !important;
         word-break: break-word;
