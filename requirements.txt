@@ -1,6 +1,7 @@
 streamlit==1.41.0
 gspread
 google-auth
+google-api-python-client
 plotly
 pandas==2.2.3
 python-dateutil

@@ -475,7 +475,10 @@ COLOR_SEQ = [t["accent"], t["green"], t["red"], "#F59E0B", "#8B5CF6", "#EC4899"]
 # データ取得
 # ============================
 SPREADSHEET_ID = "1GbB23Qzf_lhErGiWCcAJz1Yqk_UUloNatWgBpXilGkc"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
+]
 
 def classify_channel_trial(val):
     if pd.isna(val) or str(val).strip() in ["", "nan", "None"]:
@@ -515,6 +518,14 @@ def load_data():
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SPREADSHEET_ID)
+
+    # --- スプレッドシート最終更新日時（Drive API）---
+    from googleapiclient.discovery import build
+    drive_service = build("drive", "v3", credentials=creds)
+    file_meta = drive_service.files().get(
+        fileId=SPREADSHEET_ID, fields="modifiedTime"
+    ).execute()
+    sheet_modified_time = pd.Timestamp(file_meta["modifiedTime"]).tz_convert("Asia/Tokyo")
 
     # --- 生データ取得 ---
     df_orders = pd.DataFrame(sh.get_worksheet(0).get_all_records())
@@ -627,14 +638,14 @@ def load_data():
             email_to_cat, _user_validity_end, df_mrr,
             user_ltv, df_ltv, plan_order_counts,
             avg_ltv, median_ltv, avg_orders, repeater_rate, avg_tenure, churn_rate,
-            _churn_base)
+            _churn_base, sheet_modified_time)
 
 try:
     (df_orders, df_ads, df_ga4, df_ga4_lp, df_ga4_other, df_trials,
      email_to_cat, _user_validity_end, df_mrr,
      user_ltv, df_ltv, plan_order_counts,
      avg_ltv, median_ltv, avg_orders, repeater_rate, avg_tenure, churn_rate,
-     _churn_base) = load_data()
+     _churn_base, sheet_modified_time) = load_data()
 except Exception as e:
     st.error(f"データ取得に失敗しました: {e}")
     st.info("credentials.json の配置と、スプレッドシートの共有設定を確認してください。")
@@ -713,7 +724,18 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.markdown(f'<div style="font-size:11px;color:{t["text_muted"]};">📊 広告・Analyticsデータ：毎日更新<br>💳 有料課金・お試しデータ：毎週金曜日更新</div>', unsafe_allow_html=True)
+    ads_last = max(df_ads["date"].max(), df_ga4["date"].max())
+    ads_last_str = pd.Timestamp(ads_last).strftime("%Y/%m/%d") if pd.notna(ads_last) else "不明"
+    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M")
+    st.markdown(
+        f'<div style="font-size:11px;color:{t["text_muted"]};line-height:1.8;">'
+        f'📊 広告・Analytics<br>'
+        f'<span style="margin-left:8px;">最終データ: {ads_last_str}</span><br><br>'
+        f'💳 有料課金・お試し登録<br>'
+        f'<span style="margin-left:8px;">最終更新: {manual_last_str}</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
 ts_start = pd.Timestamp(start_date)
 ts_end = pd.Timestamp(end_date) + pd.Timedelta(days=1, microseconds=-1)
