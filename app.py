@@ -729,7 +729,7 @@ with st.sidebar:
     st.markdown("---")
     ads_last = max(df_ads["date"].max(), df_ga4["date"].max())
     ads_last_str = pd.Timestamp(ads_last).strftime("%Y/%m/%d") if pd.notna(ads_last) else "不明"
-    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M") if sheet_modified_time else "（Drive API要有効化）"
+    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M (JST)") if sheet_modified_time else "（Drive API要有効化）"
     st.markdown(
         f'<div style="font-size:11px;color:{t["text_muted"]};line-height:1.8;">'
         f'📊 広告・Analytics<br>'
