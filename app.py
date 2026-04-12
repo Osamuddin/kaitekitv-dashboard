@@ -497,18 +497,10 @@ if _is_cloud and not _check_login():
     st.stop()
 
 
-def _log_access():
+def _log_access(ip):
     """ログイン直後に1回だけアクセスログをGoogle Sheetsに記録"""
     import requests as _req
     try:
-        # クライアントIPを取得
-        hdrs = st.context.headers
-        # 複数のヘッダーからIPを試みる
-        ip = (hdrs.get("X-Forwarded-For", "").split(",")[-1].strip()
-              or hdrs.get("X-Real-Ip", "")
-              or hdrs.get("Cf-Connecting-Ip", "")
-              or hdrs.get("True-Client-Ip", ""))
-        _all_hdrs = str(dict(hdrs))  # デバッグ用
         # 国情報を取得
         country, country_code = "Unknown", ""
         if ip:
@@ -535,14 +527,20 @@ def _log_access():
         from datetime import datetime
         import pytz
         ts = datetime.now(pytz.timezone("Asia/Tokyo")).strftime("%Y/%m/%d %H:%M:%S")
-        log_ws.append_row([ts, country, country_code, ip, _all_hdrs[:500]])
+        log_ws.append_row([ts, country, country_code, ip])
     except Exception:
         pass
 
 
 if st.session_state.get("_login_logged") is False:
-    _log_access()
-    st.session_state["_login_logged"] = True
+    from streamlit_javascript import st_javascript
+    _client_ip = st_javascript(
+        'await fetch("https://api.ipify.org?format=json")'
+        '.then(r => r.json()).then(d => d.ip)'
+    )
+    if _client_ip and _client_ip != 0:
+        _log_access(_client_ip)
+        st.session_state["_login_logged"] = True
 
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"

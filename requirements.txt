@@ -1,6 +1,7 @@
 streamlit==1.41.0
 requests
 pytz
+streamlit-javascript
 gspread
 google-auth
 google-api-python-client
