@@ -511,12 +511,13 @@ def _log_access():
             country = geo.get("country", "Unknown")
             country_code = geo.get("countryCode", "")
         # Google Sheetsに接続
+        _scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         try:
             creds = Credentials.from_service_account_info(
-                json.loads(st.secrets["gcp_service_account"]), scopes=SCOPES
+                json.loads(st.secrets["gcp_service_account"]), scopes=_scopes
             )
         except Exception:
-            creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+            creds = Credentials.from_service_account_file("credentials.json", scopes=_scopes)
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(SPREADSHEET_ID)
         # access_log シートを取得or作成
