@@ -455,40 +455,36 @@ st.set_page_config(page_title="KaitekiTV Dashboard", layout="wide", initial_side
 # ============================
 def _check_login():
     import hashlib, hmac
-    def _verify():
-        try:
-            ok_user = hmac.compare_digest(
-                st.session_state["_login_user"],
-                st.secrets["auth"]["username"]
-            )
-            ok_pw = hmac.compare_digest(
-                hashlib.sha256(st.session_state["_login_pw"].encode()).hexdigest(),
-                st.secrets["auth"]["password_hash"]
-            )
-            st.session_state["_authenticated"] = ok_user and ok_pw
-        except Exception:
-            st.session_state["_authenticated"] = False
-        finally:
-            st.session_state["_login_pw"] = ""
 
     if st.session_state.get("_authenticated"):
         return True
 
     st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] { display: flex; align-items: center; justify-content: center; }
-    .login-box { width: 360px; margin: 120px auto; }
+    .login-box { width: 360px; margin: 80px auto; }
     </style>
     """, unsafe_allow_html=True)
 
     with st.container():
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         st.markdown("### KaitekiTV Dashboard")
-        st.text_input("ユーザー名", key="_login_user")
-        st.text_input("パスワード", type="password", key="_login_pw", on_change=_verify)
+        username = st.text_input("ユーザー名")
+        password = st.text_input("パスワード", type="password")
         if st.button("ログイン", use_container_width=True):
-            _verify()
-        if st.session_state.get("_authenticated") is False:
+            try:
+                ok_user = hmac.compare_digest(username, st.secrets["auth"]["username"])
+                ok_pw = hmac.compare_digest(
+                    hashlib.sha256(password.encode()).hexdigest(),
+                    st.secrets["auth"]["password_hash"]
+                )
+                if ok_user and ok_pw:
+                    st.session_state["_authenticated"] = True
+                    st.rerun()
+                else:
+                    st.session_state["_login_failed"] = True
+            except Exception:
+                st.session_state["_login_failed"] = True
+        if st.session_state.get("_login_failed"):
             st.error("ユーザー名またはパスワードが正しくありません")
         st.markdown('</div>', unsafe_allow_html=True)
     return False
