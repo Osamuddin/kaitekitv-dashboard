@@ -479,6 +479,7 @@ def _check_login():
                 )
                 if ok_user and ok_pw:
                     st.session_state["_authenticated"] = True
+                    st.session_state["_login_logged"] = False
                     st.rerun()
                 else:
                     st.session_state["_login_failed"] = True
@@ -494,6 +495,48 @@ except Exception:
     _is_cloud = False
 if _is_cloud and not _check_login():
     st.stop()
+
+
+def _log_access():
+    """ログイン直後に1回だけアクセスログをGoogle Sheetsに記録"""
+    import requests as _req
+    try:
+        # クライアントIPを取得
+        hdrs = st.context.headers
+        ip = hdrs.get("X-Forwarded-For", "").split(",")[0].strip() or hdrs.get("X-Real-Ip", "")
+        # 国情報を取得
+        country, country_code = "Unknown", ""
+        if ip:
+            geo = _req.get(f"http://ip-api.com/json/{ip}?fields=country,countryCode", timeout=3).json()
+            country = geo.get("country", "Unknown")
+            country_code = geo.get("countryCode", "")
+        # Google Sheetsに接続
+        try:
+            creds = Credentials.from_service_account_info(
+                json.loads(st.secrets["gcp_service_account"]), scopes=SCOPES
+            )
+        except Exception:
+            creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        # access_log シートを取得or作成
+        try:
+            log_ws = sh.worksheet("access_log")
+        except Exception:
+            log_ws = sh.add_worksheet(title="access_log", rows=10000, cols=4)
+            log_ws.append_row(["timestamp_jst", "country", "country_code", "ip"])
+        # 記録
+        from datetime import datetime
+        import pytz
+        ts = datetime.now(pytz.timezone("Asia/Tokyo")).strftime("%Y/%m/%d %H:%M:%S")
+        log_ws.append_row([ts, country, country_code, ip])
+    except Exception:
+        pass  # ログ失敗はサイレントに無視
+
+
+if st.session_state.get("_login_logged") is False:
+    _log_access()
+    st.session_state["_login_logged"] = True
 
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
