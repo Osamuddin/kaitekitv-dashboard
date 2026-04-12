@@ -519,7 +519,7 @@ def _log_access():
         except Exception:
             creds = Credentials.from_service_account_file("credentials.json", scopes=_scopes)
         gc = gspread.authorize(creds)
-        sh = gc.open_by_key(SPREADSHEET_ID)
+        sh = gc.open_by_key("1GbB23Qzf_lhErGiWCcAJz1Yqk_UUloNatWgBpXilGkc")
         # access_log シートを取得or作成
         try:
             log_ws = sh.worksheet("access_log")
