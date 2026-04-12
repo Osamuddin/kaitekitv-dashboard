@@ -482,16 +482,10 @@ def _check_login():
                     st.rerun()
                 else:
                     st.session_state["_login_failed"] = True
-                    st.session_state["_login_err"] = "credentials"
-            except Exception as e:
+            except Exception:
                 st.session_state["_login_failed"] = True
-                st.session_state["_login_err"] = str(e)
         if st.session_state.get("_login_failed"):
-            err = st.session_state.get("_login_err", "")
-            if "credentials" in err:
-                st.error("ユーザー名またはパスワードが正しくありません")
-            else:
-                st.error(f"設定エラー: {err}")
+            st.error("ユーザー名またはパスワードが正しくありません")
         st.markdown('</div>', unsafe_allow_html=True)
     return False
 
