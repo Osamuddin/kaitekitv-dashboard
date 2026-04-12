@@ -1031,8 +1031,8 @@ with st.sidebar:
     else:
         col_label.markdown(f'<div style="display:flex;align-items:center;justify-content:center;height:38px;font-weight:700;">{target_year}/{target_month:02d}</div>', unsafe_allow_html=True)
 
-    custom_start = st.date_input(tr("開始日"), value=st.session_state.custom_start or first_day)
-    custom_end = st.date_input(tr("終了日"), value=st.session_state.custom_end or end_day)
+    custom_start = st.date_input(tr("開始日"), value=st.session_state.custom_start or first_day, key="date_input_start")
+    custom_end = st.date_input(tr("終了日"), value=st.session_state.custom_end or end_day, key="date_input_end")
 
     if custom_start != first_day or custom_end != end_day:
         st.session_state.custom_mode = True
@@ -1053,6 +1053,9 @@ with st.sidebar:
         st.session_state.custom_mode = False
         st.session_state.custom_start = None
         st.session_state.custom_end = None
+        for _k in ["date_input_start", "date_input_end"]:
+            if _k in st.session_state:
+                del st.session_state[_k]
         st.rerun()
 
     st.markdown("---")
