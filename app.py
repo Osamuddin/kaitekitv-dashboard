@@ -54,6 +54,7 @@ _LANG_ZH = {
     "代理店 お試し登録": "代理商试用注册", "自社 有料課金": "自营付费",
     "代理店 有料課金": "代理商付费", "お試し → 新規転換": "试用→新付费转化",
     "有料課金（合計）": "付费总计", "新規転換": "新增转化", "既存更新": "续费更新",
+    "純増減ユーザー": "用户净增减",
     "CAC（獲得単価）": "客户获取成本（日元）", "CAC（USD換算）": "客户获取成本（USD）",
     "平均LTV": "平均LTV", "LTV : CAC 比": "LTV:CAC比",
     "解約ユーザー数": "流失用户数", "期間解約率": "期间流失率",
@@ -253,6 +254,10 @@ _TOOLTIPS = {
     "renewals": {
         "ja": '<strong>Renewals</strong>既に課金済みのユーザーによる更新（継続課金）数。<span class="formula">有料課金（合計）- 新規転換</span>',
         "zh": '<strong>续费更新</strong>已付费用户的续费（持续付费）数量。<span class="formula">付费总计 - 新增转化</span>',
+    },
+    "net_user_change": {
+        "ja": '<strong>純増減ユーザー数</strong>期間内の新規転換から解約ユーザーを引いた正味の増減数。<span class="formula">新規転換 - 解約ユーザー数</span>プラスなら成長、マイナスなら縮小。',
+        "zh": '<strong>用户净增减</strong>期间内新付费转化减去流失用户的净变化数。<span class="formula">新增转化 - 流失用户数</span>正数为增长，负数为收缩。',
     },
     # CAC/LTV
     "cac_jpy": {
@@ -1721,6 +1726,22 @@ cols[2].markdown(kpi_card(tr("平均継続期間"), f"{avg_tenure_churned:.1f}{t
 _d, _dir = pct_delta(avg_ltv_churned, prev_avg_ltv_churned)
 cols[3].markdown(kpi_card(tr("解約ユーザー 平均LTV"), f"${avg_ltv_churned:,.0f}", "blue", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("avg_ltv_churn")), unsafe_allow_html=True)
+
+# 純増減ユーザー数
+net_change = new_conversions - churn_count
+prev_net_change = prev_new_conversions - prev_churn_count
+_net_color = t["green"] if net_change >= 0 else t["red"]
+_net_sign = "+" if net_change >= 0 else ""
+cols2 = st.columns(3)
+_d, _dir = pct_delta(net_change, prev_net_change)
+cols2[0].markdown(kpi_card(
+    tr("純増減ユーザー"),
+    f"{_net_sign}{net_change:,}",
+    "green" if net_change >= 0 else "red",
+    delta=_d, delta_dir=_dir,
+    delta_label=_delta_label,
+    tooltip=tip("net_user_change")
+), unsafe_allow_html=True)
 
 if churn_count > 0:
     col1, col2 = st.columns(2)
