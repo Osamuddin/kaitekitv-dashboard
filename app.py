@@ -488,7 +488,10 @@ def _check_login():
             st.error("ユーザー名またはパスワードが正しくありません")
     return False
 
-_is_cloud = "auth" in st.secrets if hasattr(st, "secrets") else False
+try:
+    _is_cloud = "auth" in st.secrets
+except Exception:
+    _is_cloud = False
 if _is_cloud and not _check_login():
     st.stop()
 
