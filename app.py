@@ -1363,7 +1363,7 @@ _d, _dir = pct_delta(lp_cta_rate, prev_lp_cta_rate, is_rate=True)
 cols[2].markdown(kpi_card(tr("CTA クリック率"), f"{lp_cta_rate:.1f}%", "green", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("cta_rate")), unsafe_allow_html=True)
 _d, _dir = pct_delta(lp_session_duration, prev_lp_session_duration)
-cols[3].markdown(kpi_card(tr("LP 平均滞在時間"), f"{lp_session_duration:.0f} 秒", "blue", delta=_d, delta_dir=_dir,
+cols[3].markdown(kpi_card(tr("LP 平均滞在時間"), f"{lp_session_duration:.0f}<span style='font-size:16px;font-weight:400'> 秒</span>", "blue", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("lp_duration")), unsafe_allow_html=True)
 
 st.markdown(f'<div class="sub-title">{tr("その他（既存ユーザー向け）")}</div>', unsafe_allow_html=True)
@@ -1375,7 +1375,7 @@ _d, _dir = pct_delta(other_engagement_rate, prev_other_engagement_rate, is_rate=
 cols[1].markdown(kpi_card(tr("エンゲージメント率"), f"{other_engagement_rate:.1f}%", "green", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("other_engagement")), unsafe_allow_html=True)
 _d, _dir = pct_delta(other_session_duration, prev_other_session_duration)
-cols[2].markdown(kpi_card(tr("平均セッション時間"), f"{other_session_duration:.0f} 秒", "blue", delta=_d, delta_dir=_dir,
+cols[2].markdown(kpi_card(tr("平均セッション時間"), f"{other_session_duration:.0f}<span style='font-size:16px;font-weight:400'> 秒</span>", "blue", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("other_duration")), unsafe_allow_html=True)
 
 # デバイス別
@@ -1721,7 +1721,7 @@ _d, _dir = pct_delta(period_churn_rate, prev_period_churn_rate, lower_is_better=
 cols[1].markdown(kpi_card(tr("期間解約率"), f"{period_churn_rate:.1f}%", "red", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("churn_rate_period")), unsafe_allow_html=True)
 _d, _dir = pct_delta(avg_tenure_churned, prev_avg_tenure_churned)
-cols[2].markdown(kpi_card(tr("平均継続期間"), f"{avg_tenure_churned:.1f}{tr('ヶ月')}", "blue", delta=_d, delta_dir=_dir,
+cols[2].markdown(kpi_card(tr("平均継続期間"), f"{avg_tenure_churned:.1f}<span style='font-size:16px;font-weight:400'> {tr('ヶ月')}</span>", "blue", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("avg_tenure_churn")), unsafe_allow_html=True)
 _d, _dir = pct_delta(avg_ltv_churned, prev_avg_ltv_churned)
 cols[3].markdown(kpi_card(tr("解約ユーザー 平均LTV"), f"${avg_ltv_churned:,.0f}", "blue", delta=_d, delta_dir=_dir,
@@ -1730,9 +1730,8 @@ cols[3].markdown(kpi_card(tr("解約ユーザー 平均LTV"), f"${avg_ltv_churne
 # 純増減ユーザー数
 net_change = new_conversions - churn_count
 prev_net_change = prev_new_conversions - prev_churn_count
-_net_color = t["green"] if net_change >= 0 else t["red"]
 _net_sign = "+" if net_change >= 0 else ""
-cols2 = st.columns(3)
+cols2 = st.columns(4)
 _d, _dir = pct_delta(net_change, prev_net_change)
 cols2[0].markdown(kpi_card(
     tr("純増減ユーザー"),
@@ -2010,9 +2009,9 @@ cols[3].markdown(kpi_card(tr("アクティブユーザー"), f"{total_active:,}"
     delta_label=_delta_label, tooltip=tip("active_users")), unsafe_allow_html=True)
 
 cols = st.columns(4)
-cols[0].markdown(kpi_card(tr("平均注文回数"), f"{avg_orders:.1f}回", "blue",
+cols[0].markdown(kpi_card(tr("平均注文回数"), f"{avg_orders:.1f}<span style='font-size:16px;font-weight:400'>回</span>", "blue",
     delta_label=_delta_label, tooltip=tip("avg_orders")), unsafe_allow_html=True)
-cols[1].markdown(kpi_card(tr("平均継続月数"), f"{avg_tenure:.1f}{tr('ヶ月')}", "green",
+cols[1].markdown(kpi_card(tr("平均継続月数"), f"{avg_tenure:.1f}<span style='font-size:16px;font-weight:400'> {tr('ヶ月')}</span>", "green",
     delta_label=_delta_label, tooltip=tip("avg_tenure")), unsafe_allow_html=True)
 cols[2].markdown(kpi_card(tr("チャーン率"), f"{churn_rate:.1f}%", "red",
     delta_label=_delta_label, tooltip=tip("churn_rate_all")), unsafe_allow_html=True)
