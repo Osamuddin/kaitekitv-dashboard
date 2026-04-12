@@ -459,14 +459,9 @@ def _check_login():
     if st.session_state.get("_authenticated"):
         return True
 
-    st.markdown("""
-    <style>
-    .login-box { width: 360px; margin: 80px auto; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:80px;'></div>", unsafe_allow_html=True)
+    _, col, _ = st.columns([2, 1, 2])
+    with col:
         st.markdown("### KaitekiTV Dashboard")
         username = st.text_input("ユーザー名")
         password = st.text_input("パスワード", type="password")
@@ -486,7 +481,6 @@ def _check_login():
                 st.session_state["_login_failed"] = True
         if st.session_state.get("_login_failed"):
             st.error("ユーザー名またはパスワードが正しくありません")
-        st.markdown('</div>', unsafe_allow_html=True)
     return False
 
 if not _check_login():
