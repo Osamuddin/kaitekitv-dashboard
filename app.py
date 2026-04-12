@@ -57,7 +57,7 @@ _LANG_ZH = {
     "純増減ユーザー": "用户净增减",
     "CAC（獲得単価）": "客户获取成本（日元）", "CAC（USD換算）": "客户获取成本（USD）",
     "平均LTV": "平均LTV", "LTV : CAC 比": "LTV:CAC比",
-    "解約ユーザー数": "流失用户数", "期間解約率": "期间流失率",
+    "解約ユーザー数": "流失用户数", "期間内チャーン率": "期间流失率（Churn Rate）",
     "平均継続期間": "平均留存时长", "解約ユーザー 平均LTV": "流失用户平均LTV",
     "中央値LTV": "LTV中位数", "リピーター率": "复购率", "アクティブユーザー": "活跃用户",
     "平均注文回数": "平均订单次数", "平均継続月数": "平均留存月数",
@@ -1718,7 +1718,7 @@ _d, _dir = pct_delta(churn_count, prev_churn_count, lower_is_better=True)
 cols[0].markdown(kpi_card(tr("解約ユーザー数"), f"{churn_count:,}", "red", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("churned_users")), unsafe_allow_html=True)
 _d, _dir = pct_delta(period_churn_rate, prev_period_churn_rate, lower_is_better=True, is_rate=True)
-cols[1].markdown(kpi_card(tr("期間解約率"), f"{period_churn_rate:.1f}%", "red", delta=_d, delta_dir=_dir,
+cols[1].markdown(kpi_card(tr("期間内チャーン率"), f"{period_churn_rate:.1f}%", "red", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("churn_rate_period")), unsafe_allow_html=True)
 _d, _dir = pct_delta(avg_tenure_churned, prev_avg_tenure_churned)
 cols[2].markdown(kpi_card(tr("平均継続期間"), f"{avg_tenure_churned:.1f}<span style='font-size:16px;font-weight:400'> {tr('ヶ月')}</span>", "blue", delta=_d, delta_dir=_dir,
