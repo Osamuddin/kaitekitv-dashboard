@@ -503,7 +503,12 @@ def _log_access():
     try:
         # クライアントIPを取得
         hdrs = st.context.headers
-        ip = hdrs.get("X-Forwarded-For", "").split(",")[0].strip() or hdrs.get("X-Real-Ip", "")
+        # 複数のヘッダーからIPを試みる
+        ip = (hdrs.get("X-Forwarded-For", "").split(",")[-1].strip()
+              or hdrs.get("X-Real-Ip", "")
+              or hdrs.get("Cf-Connecting-Ip", "")
+              or hdrs.get("True-Client-Ip", ""))
+        _all_hdrs = str(dict(hdrs))  # デバッグ用
         # 国情報を取得
         country, country_code = "Unknown", ""
         if ip:
@@ -530,7 +535,7 @@ def _log_access():
         from datetime import datetime
         import pytz
         ts = datetime.now(pytz.timezone("Asia/Tokyo")).strftime("%Y/%m/%d %H:%M:%S")
-        log_ws.append_row([ts, country, country_code, ip])
+        log_ws.append_row([ts, country, country_code, ip, _all_hdrs[:500]])
     except Exception:
         pass
 
