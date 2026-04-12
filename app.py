@@ -450,6 +450,52 @@ def parse_end_date(val):
 # ============================
 st.set_page_config(page_title="KaitekiTV Dashboard", layout="wide", initial_sidebar_state="expanded")
 
+# ============================
+# 認証
+# ============================
+def _check_login():
+    import hashlib, hmac
+    def _verify():
+        try:
+            ok_user = hmac.compare_digest(
+                st.session_state["_login_user"],
+                st.secrets["auth"]["username"]
+            )
+            ok_pw = hmac.compare_digest(
+                hashlib.sha256(st.session_state["_login_pw"].encode()).hexdigest(),
+                st.secrets["auth"]["password_hash"]
+            )
+            st.session_state["_authenticated"] = ok_user and ok_pw
+        except Exception:
+            st.session_state["_authenticated"] = False
+        finally:
+            st.session_state["_login_pw"] = ""
+
+    if st.session_state.get("_authenticated"):
+        return True
+
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] { display: flex; align-items: center; justify-content: center; }
+    .login-box { width: 360px; margin: 120px auto; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.markdown("### KaitekiTV Dashboard")
+        st.text_input("ユーザー名", key="_login_user")
+        st.text_input("パスワード", type="password", key="_login_pw", on_change=_verify)
+        if st.button("ログイン", use_container_width=True):
+            _verify()
+        if st.session_state.get("_authenticated") is False:
+            st.error("ユーザー名またはパスワードが正しくありません")
+        st.markdown('</div>', unsafe_allow_html=True)
+    return False
+
+if not _check_login():
+    st.stop()
+
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 if "language" not in st.session_state:
