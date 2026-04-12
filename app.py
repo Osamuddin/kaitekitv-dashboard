@@ -531,17 +531,13 @@ def _log_access():
         import pytz
         ts = datetime.now(pytz.timezone("Asia/Tokyo")).strftime("%Y/%m/%d %H:%M:%S")
         log_ws.append_row([ts, country, country_code, ip])
-    except Exception as _e:
-        raise _e
+    except Exception:
+        pass
 
 
 if st.session_state.get("_login_logged") is False:
-    try:
-        _log_access()
-        st.session_state["_login_logged"] = True
-    except Exception as _e:
-        st.error(f"アクセスログエラー: {_e}")
-        st.session_state["_login_logged"] = True
+    _log_access()
+    st.session_state["_login_logged"] = True
 
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
