@@ -104,6 +104,16 @@ _LANG_ZH = {
     "月別 MRR vs 一括計上売上（USD）": "月度MRR vs 合计营收（USD）",
     "プラン別 解約数": "套餐流失数", "解約時の継続期間分布": "流失时留存时长分布",
     "国別 解約数（上位10）": "国家流失数（前10）", "チャネル別 解約数": "渠道流失数",
+    # 再契約分析
+    "再契約分析（全期間）": "复购分析（全期间）",
+    "一度解約・期限切れ後に再課金したユーザーの分析": "分析曾流失后重新付费的用户",
+    "再契約ユーザー数": "复购用户数", "再契約率": "复购率",
+    "平均再契約日数": "平均复购天数", "中央値再契約日数": "复购天数中位数",
+    "再契約までの期間分布": "复购间隔分布", "再契約までの期間": "复购间隔",
+    "1週間以内": "1周以内", "1ヶ月以内": "1个月以内（再契約）",
+    "3ヶ月以内": "3个月以内", "6ヶ月以内": "6个月以内",
+    "1年以内": "1年以内", "1年超": "超过1年",
+    "再契約時のプラン分布": "复购时套餐分布", "再契約数": "复购数",
     "アメリカ地域内訳": "美国地区占比",
     # ファネル・ステップ
     "LPセッション": "落地页会话", "期間内お試し登録": "期间试用注册",
@@ -326,6 +336,23 @@ _TOOLTIPS = {
     "unique_users": {
         "ja": '<strong>Unique Paid Users</strong>過去に1回以上課金したユニークユーザー数（全期間）。<span class="formula">VPN・テスト・金額0を除外した注文のユニーク邮箱数</span>',
         "zh": '<strong>独立付费用户</strong>历史上至少付费1次的独立用户数（全期间）。<span class="formula">排除VPN、测试及金额为0的订单后的唯一邮箱数</span>',
+    },
+    # 再契約分析
+    "resub_users": {
+        "ja": '<strong>再契約ユーザー数</strong>一度有効期限が切れた後に再課金したユーザーの延べ数（全期間）。<span class="formula">前回有効期限終了日から1日以上経過後に次注文があった件数</span>',
+        "zh": '<strong>复购用户数</strong>有效期到期后重新付费的用户累计数（全期间）。<span class="formula">上次有效期结束后超过1天再次下单的记录数</span>',
+    },
+    "resub_rate": {
+        "ja": '<strong>再契約率</strong>これまでに解約したユーザーのうち、再度課金したユーザーの割合。<span class="formula">再契約ユーザー数 / 全解約済みユーザー数 × 100</span>',
+        "zh": '<strong>复购率</strong>曾经流失的用户中重新付费的比例。<span class="formula">复购用户数 / 全部流失用户数 × 100</span>',
+    },
+    "resub_avg_days": {
+        "ja": '<strong>平均再契約日数</strong>有効期限が切れてから再課金するまでの平均日数。<span class="formula">再課金日 - 前回有効期限終了日 の平均</span>短いほど早期に戻ってきている。',
+        "zh": '<strong>平均复购天数</strong>有效期到期后到重新付费的平均天数。<span class="formula">复购日 - 上次有效期结束日 的均值</span>越短说明用户回流越快。',
+    },
+    "resub_median_days": {
+        "ja": '<strong>中央値再契約日数</strong>再契約までの日数の中央値（外れ値の影響を受けにくい）。<span class="formula">再課金日 - 前回有効期限終了日 の中央値</span>',
+        "zh": '<strong>复购天数中位数</strong>复购间隔天数的中位数（不受极端值影响）。<span class="formula">复购日 - 上次有效期结束日 的中位数</span>',
     },
 }
 
@@ -1864,6 +1891,71 @@ if churn_count > 0:
         st.plotly_chart(fig_ch, use_container_width=True, theme=None)
 else:
     st.info(tr("選択期間内に解約ユーザーはいません"))
+
+# 再契約分析（全期間）
+st.markdown(f'<div class="sub-title">{tr("再契約分析（全期間）")}</div>', unsafe_allow_html=True)
+st.caption(tr("一度解約・期限切れ後に再課金したユーザーの分析"))
+
+_ro = df_orders[df_orders["tier"] != "VPN"][["用户邮箱", "下单时间", "有効期_終了"]].copy()
+_ro = _ro.dropna(subset=["下单时间", "有効期_終了"])
+_ro = _ro.sort_values(["用户邮箱", "下单时间"])
+_ro["prev_validity_end"] = _ro.groupby("用户邮箱")["有効期_終了"].shift(1)
+_ro["gap_days"] = (_ro["下单时间"] - _ro["prev_validity_end"]).dt.days
+_resubscriptions = _ro[_ro["gap_days"] > 1].copy()
+_resub_count = len(_resubscriptions)
+_resub_users = _resubscriptions["用户邮箱"].nunique()
+_all_churned_count = int((user_ltv["last_validity_end"] < pd.Timestamp.now()).sum())
+_resub_rate = (_resub_users / _all_churned_count * 100) if _all_churned_count > 0 else 0
+_avg_gap_days = _resubscriptions["gap_days"].mean() if _resub_count > 0 else 0
+_median_gap_days = _resubscriptions["gap_days"].median() if _resub_count > 0 else 0
+
+cols = st.columns(4)
+cols[0].markdown(kpi_card(tr("再契約ユーザー数"), f"{_resub_users:,}", "green",
+    delta_label=_delta_label, tooltip=tip("resub_users")), unsafe_allow_html=True)
+cols[1].markdown(kpi_card(tr("再契約率"), f"{_resub_rate:.1f}%", "green",
+    delta_label=_delta_label, tooltip=tip("resub_rate")), unsafe_allow_html=True)
+cols[2].markdown(kpi_card(tr("平均再契約日数"), f"{_avg_gap_days:.0f}<span style='font-size:16px;font-weight:400'>日</span>", "blue",
+    delta_label=_delta_label, tooltip=tip("resub_avg_days")), unsafe_allow_html=True)
+cols[3].markdown(kpi_card(tr("中央値再契約日数"), f"{_median_gap_days:.0f}<span style='font-size:16px;font-weight:400'>日</span>", "blue",
+    delta_label=_delta_label, tooltip=tip("resub_median_days")), unsafe_allow_html=True)
+
+if _resub_count > 0:
+    col1, col2 = st.columns(2)
+    with col1:
+        def gap_bucket(d):
+            if d <= 7: return "1週間以内"
+            elif d <= 30: return "1ヶ月以内"
+            elif d <= 90: return "3ヶ月以内"
+            elif d <= 180: return "6ヶ月以内"
+            elif d <= 365: return "1年以内"
+            else: return "1年超"
+        _gap_order = ["1週間以内", "1ヶ月以内", "3ヶ月以内", "6ヶ月以内", "1年以内", "1年超"]
+        _resubscriptions["gap_bucket"] = _resubscriptions["gap_days"].apply(gap_bucket)
+        _gap_dist = _resubscriptions["gap_bucket"].value_counts().reindex(_gap_order, fill_value=0).reset_index()
+        _gap_dist.columns = ["再契約までの期間", "件数"]
+        _gap_dist_disp = _gap_dist.copy()
+        _gap_dist_disp["再契約までの期間"] = _gap_dist_disp["再契約までの期間"].apply(tr)
+        fig_gap = px.bar(_gap_dist_disp, x="再契約までの期間", y="件数",
+                         title=tr("再契約までの期間分布"),
+                         labels={"再契約までの期間": tr("再契約までの期間"), "件数": tr("件数")},
+                         color_discrete_sequence=[t["green"]])
+        fig_gap.update_layout(**PLOT_LAYOUT)
+        st.plotly_chart(fig_gap, use_container_width=True, theme=None)
+    with col2:
+        _email_to_plan = user_ltv.set_index("用户邮箱")["full_plan"]
+        _resubscriptions["full_plan"] = _resubscriptions["用户邮箱"].map(_email_to_plan).fillna("不明")
+        _resub_plan = _resubscriptions["full_plan"].value_counts().reset_index()
+        _resub_plan.columns = ["プラン", "再契約数"]
+        _resub_plan = _resub_plan[_resub_plan["プラン"] != "不明"].head(8)
+        if len(_resub_plan) > 0:
+            fig_rp = px.bar(_resub_plan, x="再契約数", y="プラン", orientation="h",
+                            title=tr("再契約時のプラン分布"),
+                            labels={"再契約数": tr("再契約数"), "プラン": tr("プラン")},
+                            color_discrete_sequence=[t["green"]])
+            fig_rp.update_layout(**PLOT_LAYOUT)
+            fig_rp.update_layout(margin=dict(l=220, r=20, t=40, b=40))
+            fig_rp.update_yaxes(categoryorder="total ascending")
+            st.plotly_chart(fig_rp, use_container_width=True, theme=None)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
