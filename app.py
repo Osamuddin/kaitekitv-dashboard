@@ -1534,7 +1534,25 @@ channel_revenue["売上"] = pd.to_numeric(channel_revenue["売上"], errors="coe
 channel_df = channel_trials.merge(channel_orders, on="channel", how="outer").merge(channel_revenue, on="channel", how="outer").fillna(0)
 channel_df["お試し登録"] = channel_df["お試し登録"].astype(int)
 channel_df["有料課金"] = channel_df["有料課金"].astype(int)
-channel_df["転換率"] = (channel_df["有料課金"] / channel_df["お試し登録"] * 100).round(1).where(channel_df["お試し登録"] > 0, 0)
+
+# 転換率: お試し登録から30日以内に初回課金（renewalsを除外した正確な計算）
+_ch_orders_dated = df_orders[
+    (df_orders["下单时间"] >= ts_start) & (df_orders["下单时间"] <= ts_end) &
+    (pd.to_numeric(df_orders["金额"], errors="coerce") > 0) &
+    (df_orders["tier"].notna()) & (df_orders["tier"] != "VPN")
+]
+_trial_ch = filtered_trials[["邮箱", "channel", "创建时间"]].drop_duplicates("邮箱")
+_first_order = _ch_orders_dated.groupby("用户邮箱")["下单时间"].min().reset_index()
+_first_order.columns = ["邮箱", "first_order_date"]
+_conv_merged = _trial_ch.merge(_first_order, on="邮箱", how="left")
+_conv_merged["converted"] = (
+    (_conv_merged["first_order_date"] >= _conv_merged["创建时间"]) &
+    (_conv_merged["first_order_date"] <= _conv_merged["创建时间"] + pd.Timedelta(days=30))
+)
+_ch_conv = _conv_merged.groupby("channel")["converted"].mean().mul(100).round(1).reset_index()
+_ch_conv.columns = ["channel", "転換率"]
+channel_df = channel_df.merge(_ch_conv, on="channel", how="left")
+channel_df["転換率"] = channel_df["転換率"].fillna(0)
 channel_df = channel_df.sort_values("お試し登録", ascending=False)
 channel_df.columns = ["チャネル", "お試し登録", "有料課金", "売上(USD)", "転換率(%)"]
 _ch_col_map = {c: tr(c) for c in channel_df.columns}
