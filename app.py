@@ -1153,7 +1153,7 @@ with st.sidebar:
     st.markdown("---")
     ads_last = max(df_ads["date"].max(), df_ga4["date"].max())
     ads_last_str = pd.Timestamp(ads_last).strftime("%Y/%m/%d") if pd.notna(ads_last) else "不明"
-    _orders_last = df_orders["有効期_開始"].max() if not df_orders.empty else None
+    _orders_last = df_orders["下单时间"].max() if not df_orders.empty else None
     _trials_last = df_trials["创建时间"].max() if not df_trials.empty else None
     _manual_dates = [d for d in [_orders_last, _trials_last] if pd.notna(d)]
     manual_last_str = pd.Timestamp(max(_manual_dates)).strftime("%Y/%m/%d (JST)") if _manual_dates else "不明"
