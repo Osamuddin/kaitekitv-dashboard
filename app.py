@@ -20,6 +20,7 @@ _LANG_ZH = {
     "期間フィルター": "日期筛选", "開始日": "开始日期", "終了日": "结束日期",
     "リセット（今月に戻る）": "重置（返回本月）",
     "広告・Analytics": "广告・Analytics", "最終データ": "最新数据",
+    "毎日自動更新": "每日自动更新", "毎週手動更新": "每周手动更新",
     "有料課金・お試し登録": "付费・试用注册", "最終更新": "最后更新",
     # ヘッダー
     "選択期間データ": "所选期间数据",
@@ -1156,12 +1157,12 @@ with st.sidebar:
     _orders_last = df_orders["下单时间"].max() if not df_orders.empty else None
     _trials_last = df_trials["创建时间"].max() if not df_trials.empty else None
     _manual_dates = [d for d in [_orders_last, _trials_last] if pd.notna(d)]
-    manual_last_str = pd.Timestamp(max(_manual_dates)).strftime("%Y/%m/%d (JST)") if _manual_dates else "不明"
+    manual_last_str = pd.Timestamp(max(_manual_dates)).strftime("%Y/%m/%d") if _manual_dates else "不明"
     st.markdown(
         f'<div style="font-size:11px;color:{t["text_muted"]};line-height:1.8;">'
-        f'📊 {tr("広告・Analytics")}<br>'
+        f'📊 {tr("広告・Analytics")} <span style="opacity:0.6;">({tr("毎日自動更新")})</span><br>'
         f'<span style="margin-left:8px;">{tr("最終データ")}: {ads_last_str}</span><br><br>'
-        f'💳 {tr("有料課金・お試し登録")}<br>'
+        f'💳 {tr("有料課金・お試し登録")} <span style="opacity:0.6;">({tr("毎週手動更新")})</span><br>'
         f'<span style="margin-left:8px;">{tr("最終更新")}: {manual_last_str}</span>'
         f'</div>',
         unsafe_allow_html=True
