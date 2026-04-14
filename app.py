@@ -1153,7 +1153,10 @@ with st.sidebar:
     st.markdown("---")
     ads_last = max(df_ads["date"].max(), df_ga4["date"].max())
     ads_last_str = pd.Timestamp(ads_last).strftime("%Y/%m/%d") if pd.notna(ads_last) else "不明"
-    manual_last_str = sheet_modified_time.strftime("%Y/%m/%d %H:%M (JST)") if sheet_modified_time else "（Drive API要有効化）"
+    _orders_last = df_orders["有効期_開始"].max() if not df_orders.empty else None
+    _trials_last = df_trials["创建时间"].max() if not df_trials.empty else None
+    _manual_dates = [d for d in [_orders_last, _trials_last] if pd.notna(d)]
+    manual_last_str = pd.Timestamp(max(_manual_dates)).strftime("%Y/%m/%d (JST)") if _manual_dates else "不明"
     st.markdown(
         f'<div style="font-size:11px;color:{t["text_muted"]};line-height:1.8;">'
         f'📊 {tr("広告・Analytics")}<br>'
