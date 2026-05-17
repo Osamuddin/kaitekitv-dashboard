@@ -1081,6 +1081,9 @@ def load_data():
     churn_rate    = (user_ltv["is_churned"].mean() * 100) if len(user_ltv) > 0 else 0
 
     _churn_base = user_ltv[["用户邮箱", "last_validity_end", "tenure_months", "ltv", "full_plan", "tier", "category"]].copy()
+    # 継続期間を有効期ベースで計算するため初回有効期_開始を付与
+    _first_validity_start = df_ltv.groupby("用户邮箱")["有効期_開始"].min()
+    _churn_base["first_validity_start"] = _churn_base["用户邮箱"].map(_first_validity_start)
     _country_map = df_orders.groupby("用户邮箱")["用户城市"].last()
     _churn_base["country"] = _churn_base["用户邮箱"].map(_country_map).apply(lambda x: clean_country(str(x)) if pd.notna(x) else "不明")
     _churn_base["channel"] = _churn_base["用户邮箱"].map(df_orders.groupby("用户邮箱")["channel"].first()).fillna("不明")
@@ -1403,6 +1406,8 @@ other_engagement_rate = filtered_ga4_other["engagement_rate"].mean() if len(filt
 other_session_duration = filtered_ga4_other["avg_session_duration"].mean() if len(filtered_ga4_other) > 0 else 0
 lp_session_duration = filtered_ga4_lp["avg_session_duration"].mean() if len(filtered_ga4_lp) > 0 else 0
 lp_form_cta_clicks = filtered_ga4_lp["form_cta_clicks"].sum() if "form_cta_clicks" in filtered_ga4_lp.columns else 0
+other_form_cta_clicks = filtered_ga4_other["form_cta_clicks"].sum() if "form_cta_clicks" in filtered_ga4_other.columns else 0
+all_form_cta_clicks = lp_form_cta_clicks + other_form_cta_clicks
 lp_cta_rate = (lp_form_cta_clicks / lp_sessions * 100) if lp_sessions > 0 else 0
 
 prev_total_sessions = prev_filtered_ga4["sessions"].sum()
@@ -1413,6 +1418,8 @@ prev_other_engagement_rate = prev_filtered_ga4_other["engagement_rate"].mean() i
 prev_other_session_duration = prev_filtered_ga4_other["avg_session_duration"].mean() if len(prev_filtered_ga4_other) > 0 else 0
 prev_lp_session_duration = prev_filtered_ga4_lp["avg_session_duration"].mean() if len(prev_filtered_ga4_lp) > 0 else 0
 prev_lp_form_cta_clicks = prev_filtered_ga4_lp["form_cta_clicks"].sum() if "form_cta_clicks" in prev_filtered_ga4_lp.columns else 0
+prev_other_form_cta_clicks = prev_filtered_ga4_other["form_cta_clicks"].sum() if "form_cta_clicks" in prev_filtered_ga4_other.columns else 0
+prev_all_form_cta_clicks = prev_lp_form_cta_clicks + prev_other_form_cta_clicks
 prev_lp_cta_rate = (prev_lp_form_cta_clicks / prev_lp_sessions * 100) if prev_lp_sessions > 0 else 0
 prev_lp_ratio = (prev_lp_sessions / prev_total_sessions * 100) if prev_total_sessions > 0 else 0
 
@@ -1522,8 +1529,12 @@ with st.expander(tr("デバッグ: チャネルデータ確認")):
     st.write("**orders.channel 分布:**", df_orders["channel"].value_counts().to_dict())
 st.caption(tr("代理店番号に基づくチャネル別の登録・課金実績（空欄=サポートサイト、110=公式サイト、その他=代理店）"))
 
-# チャネル別集計（VPN・テスト・金額0除外）
-_filtered_orders_paid = filtered_orders[(filtered_orders["tier"].notna()) & (filtered_orders["tier"] != "VPN") & (pd.to_numeric(filtered_orders["金额"], errors="coerce") > 0)]
+# チャネル別集計（VPN・テスト・金額0除外、下单時間ベースで統一）
+_filtered_orders_paid = df_orders[
+    (df_orders["下单时间"] >= ts_start) & (df_orders["下单时间"] <= ts_end) &
+    (df_orders["tier"].notna()) & (df_orders["tier"] != "VPN") &
+    (pd.to_numeric(df_orders["金额"], errors="coerce") > 0)
+]
 channel_trials = filtered_trials.groupby("channel").size().reset_index(name="お試し登録")
 channel_orders = _filtered_orders_paid.groupby("channel")["用户邮箱"].nunique().reset_index()
 channel_orders.columns = ["channel", "有料課金"]
@@ -1536,13 +1547,8 @@ channel_df["お試し登録"] = channel_df["お試し登録"].astype(int)
 channel_df["有料課金"] = channel_df["有料課金"].astype(int)
 
 # 転換率: お試し登録から30日以内に初回課金（renewalsを除外した正確な計算）
-_ch_orders_dated = df_orders[
-    (df_orders["下单时间"] >= ts_start) & (df_orders["下单时间"] <= ts_end) &
-    (pd.to_numeric(df_orders["金额"], errors="coerce") > 0) &
-    (df_orders["tier"].notna()) & (df_orders["tier"] != "VPN")
-]
 _trial_ch = filtered_trials[["邮箱", "channel", "创建时间"]].drop_duplicates("邮箱")
-_first_order = _ch_orders_dated.groupby("用户邮箱")["下单时间"].min().reset_index()
+_first_order = _filtered_orders_paid.groupby("用户邮箱")["下单时间"].min().reset_index()
 _first_order.columns = ["邮箱", "first_order_date"]
 _conv_merged = _trial_ch.merge(_first_order, on="邮箱", how="left")
 _conv_merged["converted"] = (
@@ -1564,7 +1570,11 @@ agent_trials = filtered_trials[~filtered_trials["channel"].isin(_self_channels)]
 self_orders = _filtered_orders_paid[_filtered_orders_paid["channel"].isin(_self_channels)]
 agent_orders = _filtered_orders_paid[~_filtered_orders_paid["channel"].isin(_self_channels)]
 
-_prev_filtered_orders_paid = prev_filtered_orders[(prev_filtered_orders["tier"].notna()) & (prev_filtered_orders["tier"] != "VPN") & (pd.to_numeric(prev_filtered_orders["金额"], errors="coerce") > 0)]
+_prev_filtered_orders_paid = df_orders[
+    (df_orders["下单时间"] >= prev_ts_start) & (df_orders["下单时间"] <= prev_ts_end) &
+    (df_orders["tier"].notna()) & (df_orders["tier"] != "VPN") &
+    (pd.to_numeric(df_orders["金额"], errors="coerce") > 0)
+]
 prev_self_trials = prev_filtered_trials[prev_filtered_trials["channel"].isin(_self_channels)]
 prev_agent_trials = prev_filtered_trials[~prev_filtered_trials["channel"].isin(_self_channels)]
 prev_self_orders = _prev_filtered_orders_paid[_prev_filtered_orders_paid["channel"].isin(_self_channels)]
@@ -1622,7 +1632,8 @@ st.markdown(f'<div class="section-card"><div class="section-title">{tr("獲得�
 st.caption(tr("広告からお試し登録までの流入経路（同一期間の新規流入）"))
 
 acq_stages = [tr("インプレッション"), tr("クリック数"), tr("LPセッション"), tr("CTAクリック"), tr("お試し登録数")]
-acq_values = [int(total_impressions), int(total_clicks), int(lp_sessions), int(lp_form_cta_clicks), total_trials]
+official_trials = filtered_trials[filtered_trials["channel"] == "サポートサイト"]["邮箱"].nunique()
+acq_values = [int(total_impressions), int(total_clicks), int(lp_sessions), int(all_form_cta_clicks), official_trials]
 
 fig_acq = go.Figure(go.Funnel(
     y=acq_stages, x=acq_values,
@@ -1638,13 +1649,13 @@ step_tooltips = {
     "IMP → Click": '<strong>CTR（クリック率）</strong>広告表示からクリックへの転換率。<span class="formula">クリック数 / インプレッション × 100</span>広告クリエイティブの訴求力を測る。',
     "Click → LP": '<strong>LP到達率</strong>広告クリックからLP表示への到達率。<span class="formula">LPセッション / クリック数 × 100</span>100%にならない原因: 離脱、計測差、リダイレクト等。',
     "LP → CTA": '<strong>CTAクリック率</strong>LPを見た人がCTAボタンを押した割合。<span class="formula">CTAクリック / LPセッション × 100</span>LPの構成・コピーの効果を示す。',
-    "CTA → 登録": '<strong>フォーム完了率</strong>CTAクリック後に実際にお試し登録を完了した割合。<span class="formula">お試し登録数 / CTAクリック × 100</span>フォームのUX・入力項目の妥当性を示す。',
+    "CTA → 登録": '<strong>フォーム完了率</strong>CTAクリック後に実際にお試し登録を完了した割合。<span class="formula">サポートサイト経由お試し登録数 / CTAクリック（全ページ） × 100</span>フォームのUX・入力項目の妥当性を示す。',
 }
 step_pairs = [
     ("IMP → Click", tr("CTR"), total_impressions, total_clicks),
     ("Click → LP", tr("LP到達率"), total_clicks, int(lp_sessions)),
-    ("LP → CTA", tr("CTAクリック率"), int(lp_sessions), int(lp_form_cta_clicks)),
-    ("CTA → 登録", tr("フォーム完了率"), int(lp_form_cta_clicks), total_trials),
+    ("LP → CTA", tr("CTAクリック率"), int(lp_sessions), int(all_form_cta_clicks)),
+    ("CTA → 登録", tr("フォーム完了率"), int(all_form_cta_clicks), official_trials),
 ]
 cols = st.columns(4)
 for i, (label, metric_name, prev, curr) in enumerate(step_pairs):
@@ -1807,8 +1818,20 @@ prev_avg_tenure_churned = prev_churned_period["tenure_months"].mean() if prev_ch
 avg_ltv_churned = churned_period["ltv"].mean() if churn_count > 0 else 0
 prev_avg_ltv_churned = prev_churned_period["ltv"].mean() if prev_churn_count > 0 else 0
 
-active_at_period_start = (user_ltv["last_validity_end"] >= ts_start).sum()
-prev_active_at_period_start = (user_ltv["last_validity_end"] >= prev_ts_start).sum()
+# 期初時点で有効な有料サブスクを持つユーザー数（有効期_開始 < 期初 AND 有効期_終了 >= 期初）
+# 旧定義: last_validity_end >= ts_start → 期中新規加入者も含む分母バグで過小評価
+active_at_period_start = int(
+    df_ltv[
+        (df_ltv["有効期_開始"] < ts_start) &
+        (df_ltv["validity_end"] >= ts_start)
+    ]["用户邮箱"].nunique()
+)
+prev_active_at_period_start = int(
+    df_ltv[
+        (df_ltv["有効期_開始"] < prev_ts_start) &
+        (df_ltv["validity_end"] >= prev_ts_start)
+    ]["用户邮箱"].nunique()
+)
 period_churn_rate = (churn_count / active_at_period_start * 100) if active_at_period_start > 0 else 0
 prev_period_churn_rate = (prev_churn_count / prev_active_at_period_start * 100) if prev_active_at_period_start > 0 else 0
 
@@ -1862,14 +1885,18 @@ if churn_count > 0:
 
     # 継続期間別分布
     with col2:
-        def tenure_bucket(m):
-            if m <= 1.5: return "1ヶ月以下"
-            elif m <= 3.5: return "2〜3ヶ月"
-            elif m <= 6.5: return "4〜6ヶ月"
-            elif m <= 12.5: return "7〜12ヶ月"
-            else: return "13ヶ月以上"
+        # 継続期間を有効期ベースの日数で計算（月次レポートと同一定義）
+        # 旧: (last_order - first_order) → 1注文のみのユーザーが全員「1ヶ月以下」になるバグ
+        # 新: (last_validity_end - first_validity_start).days → 実際のサブスク期間
+        def tenure_bucket(d):
+            if d <= 31:  return "1ヶ月以下"
+            elif d <= 90:  return "2〜3ヶ月"
+            elif d <= 180: return "4〜6ヶ月"
+            elif d <= 365: return "7〜12ヶ月"
+            else:          return "13ヶ月以上"
         bucket_order = ["1ヶ月以下", "2〜3ヶ月", "4〜6ヶ月", "7〜12ヶ月", "13ヶ月以上"]
-        churned_period["tenure_bucket"] = churned_period["tenure_months"].apply(tenure_bucket)
+        _tenure_days = (churned_period["last_validity_end"] - churned_period["first_validity_start"]).dt.days.fillna(0).astype(int)
+        churned_period["tenure_bucket"] = _tenure_days.apply(tenure_bucket)
         tenure_dist = churned_period["tenure_bucket"].value_counts().reindex(bucket_order, fill_value=0).reset_index()
         tenure_dist.columns = ["継続期間", "人数"]
         tenure_dist_disp = tenure_dist.copy()
