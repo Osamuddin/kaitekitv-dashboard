@@ -1632,8 +1632,7 @@ st.markdown(f'<div class="section-card"><div class="section-title">{tr("獲得�
 st.caption(tr("広告からお試し登録までの流入経路（同一期間の新規流入）"))
 
 acq_stages = [tr("インプレッション"), tr("クリック数"), tr("LPセッション"), tr("CTAクリック"), tr("お試し登録数")]
-official_trials = filtered_trials[filtered_trials["channel"] == "サポートサイト"]["邮箱"].nunique()
-acq_values = [int(total_impressions), int(total_clicks), int(lp_sessions), int(all_form_cta_clicks), official_trials]
+acq_values = [int(total_impressions), int(total_clicks), int(lp_sessions), int(all_form_cta_clicks), total_trials]
 
 fig_acq = go.Figure(go.Funnel(
     y=acq_stages, x=acq_values,
@@ -1655,7 +1654,7 @@ step_pairs = [
     ("IMP → Click", tr("CTR"), total_impressions, total_clicks),
     ("Click → LP", tr("LP到達率"), total_clicks, int(lp_sessions)),
     ("LP → CTA", tr("CTAクリック率"), int(lp_sessions), int(all_form_cta_clicks)),
-    ("CTA → 登録", tr("フォーム完了率"), int(all_form_cta_clicks), official_trials),
+    ("CTA → 登録", tr("フォーム完了率"), int(all_form_cta_clicks), total_trials),
 ]
 cols = st.columns(4)
 for i, (label, metric_name, prev, curr) in enumerate(step_pairs):
