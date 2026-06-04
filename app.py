@@ -989,13 +989,20 @@ def load_data():
     df_orders["有効期_終了"] = df_orders["有效期"].apply(parse_end_date)
     df_orders = df_orders.dropna(subset=["有効期_開始"])
     df_orders["下单时间"] = pd.to_datetime(df_orders["下单时间"], errors="coerce", format="mixed")
+    if df_orders["下单时间"].dt.tz is not None:
+        df_orders["下单时间"] = df_orders["下单时间"].dt.tz_localize(None)
     df_orders["tier"]         = df_orders.apply(get_order_tier, axis=1)
     df_orders["period"]       = df_orders.apply(get_order_period, axis=1)
     df_orders["order_category"] = df_orders.apply(get_order_category, axis=1)
 
     # --- df_trials 前処理 + チャネル紐づけ ---
     df_trials["创建时间"] = pd.to_datetime(df_trials["创建时间"], errors="coerce", format="mixed")
+    # タイムゾーン情報を除去し、スプレッドシートの値（CST）をそのまま使う
+    if df_trials["创建时间"].dt.tz is not None:
+        df_trials["创建时间"] = df_trials["创建时间"].dt.tz_localize(None)
     df_trials = df_trials.dropna(subset=["创建时间"])
+    if "开通的业务" in df_trials.columns:
+        df_trials = df_trials[df_trials["开通的业务"].astype(str).str.upper() != "VPN"]
     if "代理商" in df_trials.columns:
         df_trials["channel"] = df_trials["代理商"].apply(classify_channel_trial)
     else:
@@ -1214,12 +1221,13 @@ ts_start = pd.Timestamp(start_date)
 ts_end = pd.Timestamp(end_date) + pd.Timedelta(days=1, microseconds=-1)
 
 # フィルター適用
-filtered_orders = df_orders[(df_orders["有効期_開始"] >= ts_start) & (df_orders["有効期_開始"] <= ts_end)]
+filtered_orders = df_orders[(df_orders["有効期_開始"] >= ts_start) & (df_orders["有効期_開始"] <= ts_end) & (df_orders["tier"] != "VPN")]
 filtered_ads = df_ads[(df_ads["date"] >= ts_start) & (df_ads["date"] <= ts_end)]
 filtered_ga4 = df_ga4[(df_ga4["date"] >= ts_start) & (df_ga4["date"] <= ts_end)]
 filtered_ga4_lp = df_ga4_lp[(df_ga4_lp["date"] >= ts_start) & (df_ga4_lp["date"] <= ts_end)]
 filtered_ga4_other = df_ga4_other[(df_ga4_other["date"] >= ts_start) & (df_ga4_other["date"] <= ts_end)]
 filtered_trials = df_trials[(df_trials["创建时间"] >= ts_start) & (df_trials["创建时间"] <= ts_end)]
+
 
 # 前期間フィルター（選択期間と同じ長さだけ前にシフト）
 _period_days = (ts_end - ts_start).days + 1
@@ -1236,7 +1244,7 @@ prev_filtered_ga4 = df_ga4[(df_ga4["date"] >= prev_ts_start) & (df_ga4["date"] <
 prev_filtered_ga4_lp = df_ga4_lp[(df_ga4_lp["date"] >= prev_ts_start) & (df_ga4_lp["date"] <= prev_ts_end)]
 prev_filtered_ga4_other = df_ga4_other[(df_ga4_other["date"] >= prev_ts_start) & (df_ga4_other["date"] <= prev_ts_end)]
 prev_filtered_trials = df_trials[(df_trials["创建时间"] >= prev_ts_start) & (df_trials["创建时间"] <= prev_ts_end)]
-prev_filtered_orders = df_orders[(df_orders["有効期_開始"] >= prev_ts_start) & (df_orders["有効期_開始"] <= prev_ts_end)]
+prev_filtered_orders = df_orders[(df_orders["有効期_開始"] >= prev_ts_start) & (df_orders["有効期_開始"] <= prev_ts_end) & (df_orders["tier"] != "VPN")]
 
 # ============================
 # KPIカードヘルパー
@@ -1672,7 +1680,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="section-card"><div class="section-title">{tr("収益化ファネル")}</div>', unsafe_allow_html=True)
 st.caption(tr("期間内の有料課金ユーザーを「新規転換（課金日の1ヶ月以内にお試し登録）」と「既存更新」に分類"))
 
-filtered_orders_by_order_date = df_orders[(df_orders["下单时间"] >= ts_start) & (df_orders["下单时间"] <= ts_end)]
+filtered_orders_by_order_date = df_orders[(df_orders["下单时间"] >= ts_start) & (df_orders["下单时间"] <= ts_end) & (df_orders["tier"] != "VPN")]
 trial_lookup = df_trials.groupby("邮箱")["创建时间"].first()
 
 def calc_conversions(orders_df, trial_lkp):
@@ -1688,7 +1696,7 @@ new_conversions = calc_conversions(filtered_orders_by_order_date, trial_lookup)
 paid_unique = len(filtered_orders_by_order_date["用户邮箱"].unique())
 renewals = paid_unique - new_conversions
 
-prev_orders_by_order_date = df_orders[(df_orders["下单时间"] >= prev_ts_start) & (df_orders["下单时间"] <= prev_ts_end)]
+prev_orders_by_order_date = df_orders[(df_orders["下单时间"] >= prev_ts_start) & (df_orders["下单时间"] <= prev_ts_end) & (df_orders["tier"] != "VPN")]
 prev_new_conversions = calc_conversions(prev_orders_by_order_date, trial_lookup)
 prev_paid_unique = len(prev_orders_by_order_date["用户邮箱"].unique())
 prev_renewals = prev_paid_unique - prev_new_conversions
