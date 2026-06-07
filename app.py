@@ -29,7 +29,8 @@ _LANG_ZH = {
     "期間フィルターに依存しない、サービス開始以来の累計データ": "不受日期筛选影响的服务开始以来累计数据",
     "以上 選択期間データ": "以上 所选期间数据",
     # セクションタイトル
-    "広告効率": "广告效率", "LP / サイトパフォーマンス": "落地页/网站表现",
+    "広告効率": "广告效率", "広告媒体別比較": "广告渠道对比",
+    "LP / サイトパフォーマンス": "落地页/网站表现",
     "コンバージョン・課金": "转化・付费", "チャネル別分析": "渠道分析",
     "獲得ファネル": "获客漏斗", "収益化ファネル": "变现漏斗",
     "解約分析": "流失分析", "国別データ": "国家数据", "月別推移": "月度趋势",
@@ -44,7 +45,7 @@ _LANG_ZH = {
     "更新回数の分布": "续费次数分布",
     # KPIラベル
     "インプレッション": "展示次数", "クリック数": "点击次数",
-    "CTR": "点击率", "CPC": "单次点击费用", "広告費": "广告费",
+    "CTR": "点击率", "CPC": "单次点击费用", "広告費": "广告费", "媒体": "渠道", "指標": "指标", "値": "数值",
     "全体セッション": "总会话数", "LP セッション比率": "落地页会话占比",
     "エンゲージメント率": "参与率", "LP セッション": "落地页会话",
     "CTAクリック": "CTA点击", "CTA クリック率": "CTA点击率",
@@ -155,12 +156,12 @@ def tr(key):
 _TOOLTIPS = {
     # 広告効率
     "impressions": {
-        "ja": '<strong>Impressions</strong>広告が画面上に表示された回数。<span class="formula">Google Ads 表示回数の合計</span>表示されただけでは費用は発生しない。認知度の指標。',
-        "zh": '<strong>展示次数</strong>广告显示在屏幕上的次数。<span class="formula">Google Ads 展示次数合计</span>仅展示不产生费用，是衡量品牌曝光的指标。',
+        "ja": '<strong>Impressions</strong>広告が画面上に表示された回数。<span class="formula">Google Ads + Meta Ads 表示回数の合計</span>表示されただけでは費用は発生しない。認知度の指標。',
+        "zh": '<strong>展示次数</strong>广告显示在屏幕上的次数。<span class="formula">Google Ads + Meta Ads 展示次数合计</span>仅展示不产生费用，是衡量品牌曝光的指标。',
     },
     "clicks": {
-        "ja": '<strong>Clicks</strong>広告がクリックされた回数。<span class="formula">Google Ads クリック数の合計</span>LPへの流入数に直結する。',
-        "zh": '<strong>点击次数</strong>广告被点击的次数。<span class="formula">Google Ads 点击次数合计</span>直接影响落地页的流量。',
+        "ja": '<strong>Clicks</strong>広告がクリックされた回数。<span class="formula">Google Ads + Meta Ads クリック数の合計</span>LPへの流入数に直結する。',
+        "zh": '<strong>点击次数</strong>广告被点击的次数。<span class="formula">Google Ads + Meta Ads 点击次数合计</span>直接影响落地页的流量。',
     },
     "ctr": {
         "ja": '<strong>Click Through Rate（クリック率）</strong>広告を見た人のうち、クリックした人の割合。<span class="formula">クリック数 / インプレッション × 100</span>広告の訴求力を示す。業界平均は2〜5%程度。',
@@ -172,8 +173,8 @@ _TOOLTIPS = {
     },
     # LP・サイト
     "ad_spend": {
-        "ja": '<strong>Ad Spend</strong>選択期間内のGoogle Ads広告費用の合計。<span class="formula">Google Ads cost の合計</span>',
-        "zh": '<strong>广告费</strong>所选期间内Google Ads广告费用合计。<span class="formula">Google Ads cost 合计</span>',
+        "ja": '<strong>Ad Spend</strong>選択期間内の広告費用の合計。<span class="formula">Google Ads + Meta Ads cost の合計</span>',
+        "zh": '<strong>广告费</strong>所选期间内广告费用合计。<span class="formula">Google Ads + Meta Ads cost 合计</span>',
     },
     "total_sessions": {
         "ja": '<strong>Total Sessions</strong>LP + その他ページを含む全サイトのセッション数。<span class="formula">GA4 sessions（LP + Other）の合計</span>',
@@ -980,7 +981,14 @@ def load_data():
 
     # --- 生データ取得 ---
     df_orders = pd.DataFrame(sh.get_worksheet(0).get_all_records())
-    df_ads    = pd.DataFrame(sh.worksheet("google_ads_data").get_all_records())
+    df_google_ads = pd.DataFrame(sh.worksheet("google_ads_data").get_all_records())
+    df_google_ads["source"] = "Google"
+    try:
+        df_meta_ads = pd.DataFrame(sh.worksheet("meta_ads_data").get_all_records())
+        df_meta_ads["source"] = "Meta"
+    except Exception:
+        df_meta_ads = pd.DataFrame(columns=list(df_google_ads.columns))
+    df_ads = pd.concat([df_google_ads, df_meta_ads], ignore_index=True)
     df_ga4    = pd.DataFrame(sh.worksheet("ga4_data").get_all_records())
     df_trials = pd.DataFrame(sh.worksheet("trials").get_all_records())
 
@@ -1223,6 +1231,8 @@ ts_end = pd.Timestamp(end_date) + pd.Timedelta(days=1, microseconds=-1)
 # フィルター適用
 filtered_orders = df_orders[(df_orders["有効期_開始"] >= ts_start) & (df_orders["有効期_開始"] <= ts_end) & (df_orders["tier"] != "VPN")]
 filtered_ads = df_ads[(df_ads["date"] >= ts_start) & (df_ads["date"] <= ts_end)]
+filtered_google_ads = filtered_ads[filtered_ads["source"] == "Google"]
+filtered_meta_ads = filtered_ads[filtered_ads["source"] == "Meta"]
 filtered_ga4 = df_ga4[(df_ga4["date"] >= ts_start) & (df_ga4["date"] <= ts_end)]
 filtered_ga4_lp = df_ga4_lp[(df_ga4_lp["date"] >= ts_start) & (df_ga4_lp["date"] <= ts_end)]
 filtered_ga4_other = df_ga4_other[(df_ga4_other["date"] >= ts_start) & (df_ga4_other["date"] <= ts_end)]
@@ -1246,6 +1256,8 @@ elif _period_days <= 35:
 else:
     _delta_label = "前期比"
 prev_filtered_ads = df_ads[(df_ads["date"] >= prev_ts_start) & (df_ads["date"] <= prev_ts_end)]
+prev_filtered_google_ads = prev_filtered_ads[prev_filtered_ads["source"] == "Google"]
+prev_filtered_meta_ads = prev_filtered_ads[prev_filtered_ads["source"] == "Meta"]
 prev_filtered_ga4 = df_ga4[(df_ga4["date"] >= prev_ts_start) & (df_ga4["date"] <= prev_ts_end)]
 prev_filtered_ga4_lp = df_ga4_lp[(df_ga4_lp["date"] >= prev_ts_start) & (df_ga4_lp["date"] <= prev_ts_end)]
 prev_filtered_ga4_other = df_ga4_other[(df_ga4_other["date"] >= prev_ts_start) & (df_ga4_other["date"] <= prev_ts_end)]
@@ -1408,6 +1420,56 @@ _d, _dir = pct_delta(overall_cpc, prev_cpc, lower_is_better=True)
 cols[3].markdown(kpi_card(tr("CPC"), f"¥{overall_cpc:,.0f}", "blue", delta=_d, delta_dir=_dir,
     delta_label=_delta_label, tooltip=tip("cpc")), unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
+
+# ============================
+# 広告媒体別比較
+# ============================
+_has_meta = len(filtered_meta_ads) > 0 or len(prev_filtered_meta_ads) > 0
+if _has_meta:
+    st.markdown(f'<div class="section-card"><div class="section-title">{tr("広告媒体別比較")}</div>', unsafe_allow_html=True)
+    _col_g, _col_m = st.columns(2)
+
+    _g_imp = int(filtered_google_ads["impressions"].sum())
+    _g_clk = int(filtered_google_ads["clicks"].sum())
+    _g_cost = filtered_google_ads["cost"].sum()
+    _g_ctr = (_g_clk / _g_imp * 100) if _g_imp > 0 else 0
+    _g_cpc = (_g_cost / _g_clk) if _g_clk > 0 else 0
+
+    _m_imp = int(filtered_meta_ads["impressions"].sum())
+    _m_clk = int(filtered_meta_ads["clicks"].sum())
+    _m_cost = filtered_meta_ads["cost"].sum()
+    _m_ctr = (_m_clk / _m_imp * 100) if _m_imp > 0 else 0
+    _m_cpc = (_m_cost / _m_clk) if _m_clk > 0 else 0
+
+    with _col_g:
+        st.markdown(f"**Google Ads**")
+        st.metric(tr("インプレッション"), f"{_g_imp:,}")
+        st.metric(tr("クリック数"), f"{_g_clk:,}")
+        st.metric("CTR", f"{_g_ctr:.2f}%")
+        st.metric("CPC", f"¥{_g_cpc:,.0f}")
+        st.metric(tr("広告費"), f"¥{_g_cost:,.0f}")
+
+    with _col_m:
+        st.markdown(f"**Meta Ads**")
+        st.metric(tr("インプレッション"), f"{_m_imp:,}")
+        st.metric(tr("クリック数"), f"{_m_clk:,}")
+        st.metric("CTR", f"{_m_ctr:.2f}%")
+        st.metric("CPC", f"¥{_m_cpc:,.0f}")
+        st.metric(tr("広告費"), f"¥{_m_cost:,.0f}")
+
+    # 媒体別比較チャート
+    _compare_df = pd.DataFrame({
+        tr("指標"): [tr("インプレッション"), tr("クリック数"), tr("広告費")],
+        "Google": [_g_imp, _g_clk, _g_cost],
+        "Meta": [_m_imp, _m_clk, _m_cost],
+    })
+    _compare_melted = _compare_df.melt(id_vars=tr("指標"), var_name=tr("媒体"), value_name=tr("値"))
+    fig_compare = px.bar(_compare_melted, x=tr("指標"), y=tr("値"), color=tr("媒体"),
+                         barmode="group", title=tr("広告媒体別比較"),
+                         color_discrete_map={"Google": t["accent"], "Meta": t["green"]})
+    fig_compare.update_layout(**PLOT_LAYOUT)
+    st.plotly_chart(fig_compare, use_container_width=True, theme=None)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================
 # セクション2: LP/サイトパフォーマンス
@@ -2087,6 +2149,13 @@ trend_orders = df_orders[(df_orders["有効期_開始"] >= trend_start) & (df_or
 monthly_ads = trend_ads.set_index("date").resample("MS").agg({"impressions": "sum", "clicks": "sum", "cost": "sum"}).reset_index()
 monthly_ads["月"] = monthly_ads["date"].dt.strftime("%Y/%m")
 
+# 媒体別月次集計（トレンドチャート用）
+_has_source = "source" in trend_ads.columns
+if _has_source:
+    monthly_ads_by_source = trend_ads.groupby([pd.Grouper(key="date", freq="MS"), "source"]).agg(
+        {"impressions": "sum", "clicks": "sum", "cost": "sum"}).reset_index()
+    monthly_ads_by_source["月"] = monthly_ads_by_source["date"].dt.strftime("%Y/%m")
+
 monthly_ga4_lp = trend_ga4_lp.set_index("date").resample("MS").agg({"sessions": "sum", "engaged_sessions": "sum"}).reset_index()
 monthly_ga4_lp["月"] = monthly_ga4_lp["date"].dt.strftime("%Y/%m")
 monthly_ga4_other = trend_ga4_other.set_index("date").resample("MS").agg({"sessions": "sum", "engaged_sessions": "sum"}).reset_index()
@@ -2101,15 +2170,27 @@ monthly_orders["月"] = monthly_orders["有効期_開始"].dt.strftime("%Y/%m")
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([tr("IMP & Click"), tr("広告費"), tr("セッション"), tr("お試し登録数"), tr("有料課金ユーザー"), tr("MRR（按分売上）")])
 
 with tab1:
-    fig1 = px.line(monthly_ads, x="月", y=["impressions", "clicks"], markers=True,
-                   labels={"value": tr("件数"), "variable": tr("指標")}, title=tr("月別 インプレッション & クリック"),
-                   color_discrete_sequence=[t["accent"], t["green"]])
+    if _has_source and len(monthly_ads_by_source["source"].unique()) > 1:
+        fig1 = px.bar(monthly_ads_by_source, x="月", y="impressions", color="source",
+                      barmode="stack", title=tr("月別 インプレッション（媒体別）"),
+                      labels={"impressions": tr("インプレッション"), "source": tr("媒体")},
+                      color_discrete_map={"Google": t["accent"], "Meta": t["green"]})
+    else:
+        fig1 = px.line(monthly_ads, x="月", y=["impressions", "clicks"], markers=True,
+                       labels={"value": tr("件数"), "variable": tr("指標")}, title=tr("月別 インプレッション & クリック"),
+                       color_discrete_sequence=[t["accent"], t["green"]])
     fig1.update_layout(**PLOT_LAYOUT)
     st.plotly_chart(fig1, use_container_width=True, theme=None)
 
 with tab2:
-    fig2 = px.bar(monthly_ads, x="月", y="cost", title=tr("月別 広告費"), labels={"cost": tr("広告費（円）")},
-                  color_discrete_sequence=[t["accent"]])
+    if _has_source and len(monthly_ads_by_source["source"].unique()) > 1:
+        fig2 = px.bar(monthly_ads_by_source, x="月", y="cost", color="source",
+                      barmode="stack", title=tr("月別 広告費（媒体別）"),
+                      labels={"cost": tr("広告費（円）"), "source": tr("媒体")},
+                      color_discrete_map={"Google": t["accent"], "Meta": t["green"]})
+    else:
+        fig2 = px.bar(monthly_ads, x="月", y="cost", title=tr("月別 広告費"), labels={"cost": tr("広告費（円）")},
+                      color_discrete_sequence=[t["accent"]])
     fig2.update_layout(**PLOT_LAYOUT)
     st.plotly_chart(fig2, use_container_width=True, theme=None)
 
