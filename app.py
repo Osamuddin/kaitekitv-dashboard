@@ -1230,9 +1230,15 @@ filtered_trials = df_trials[(df_trials["创建时间"] >= ts_start) & (df_trials
 
 
 # 前期間フィルター（選択期間と同じ長さだけ前にシフト）
+# 前月同期間比（6/1〜6/7 → 5/1〜5/7、月全体なら前月全体）
 _period_days = (ts_end - ts_start).days + 1
-prev_ts_start = ts_start - pd.Timedelta(days=_period_days)
-prev_ts_end = ts_start - pd.Timedelta(microseconds=1)
+prev_ts_start = ts_start - pd.DateOffset(months=1)
+# 月初〜月末の場合は前月全体、それ以外は同じ日数
+_prev_month_end = prev_ts_start + pd.offsets.MonthEnd(0)
+if start_date.day == 1 and end_date == last_day_of_month:
+    prev_ts_end = pd.Timestamp(_prev_month_end) + pd.Timedelta(hours=23, minutes=59, seconds=59, microseconds=999999)
+else:
+    prev_ts_end = prev_ts_start + pd.Timedelta(days=_period_days - 1, hours=23, minutes=59, seconds=59, microseconds=999999)
 if _period_days >= 350:
     _delta_label = "前年比"
 elif _period_days <= 35:
