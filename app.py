@@ -1039,7 +1039,7 @@ def load_data():
     _user_validity_end = df_orders[df_orders["tier"] != "VPN"].groupby("用户邮箱")["有効期_終了"].max()
 
     # --- MRR ---
-    df_mrr = calc_mrr(df_orders)
+    df_mrr = calc_mrr(df_orders[(df_orders["tier"].notna()) & (df_orders["tier"] != "VPN")])
 
     # --- LTV・ユーザー集計 ---
     df_ltv = df_orders.copy()

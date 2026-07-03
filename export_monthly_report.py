@@ -262,7 +262,7 @@ else:
 _trial_channel_map = df_trials.groupby("邮箱")["channel"].first()
 df_orders["channel"] = df_orders["用户邮箱"].map(_trial_channel_map).fillna("サポートサイト")
 
-df_mrr = calc_mrr(df_orders)
+df_mrr = calc_mrr(df_orders[(df_orders["tier"].notna()) & (df_orders["tier"] != "VPN")])
 
 # LTV・ユーザー集計（全期間）
 df_ltv = df_orders.copy()
@@ -319,8 +319,9 @@ cost = m_ads["cost"].sum()
 lp_sessions = int(m_ga4_lp["sessions"].sum())
 cta_clicks = int(m_ga4_lp["form_cta_clicks"].sum()) if "form_cta_clicks" in m_ga4_lp.columns else 0
 total_trials = len(m_trials)
-total_orders = len(m_orders)
-revenue = float(m_orders["金额"].sum())
+m_orders_excl_vpn = m_orders[(m_orders["tier"].notna()) & (m_orders["tier"] != "VPN") & (m_orders["金额"] > 0)]
+total_orders = len(m_orders_excl_vpn)
+revenue = float(m_orders_excl_vpn["金额"].sum())
 
 p_imp = int(p_ads["impressions"].sum())
 p_clicks = int(p_ads["clicks"].sum())
@@ -328,8 +329,9 @@ p_cost = p_ads["cost"].sum()
 p_lp_sessions = int(p_ga4_lp["sessions"].sum())
 p_cta_clicks = int(p_ga4_lp["form_cta_clicks"].sum()) if "form_cta_clicks" in p_ga4_lp.columns else 0
 p_total_trials = len(p_trials)
-p_total_orders = len(p_orders)
-p_revenue = float(p_orders["金额"].sum())
+p_orders_excl_vpn = p_orders[(p_orders["tier"].notna()) & (p_orders["tier"] != "VPN") & (p_orders["金额"] > 0)]
+p_total_orders = len(p_orders_excl_vpn)
+p_revenue = float(p_orders_excl_vpn["金额"].sum())
 
 # MRR
 m_mrr_val = float(df_mrr[df_mrr["month"] == MONTH_START]["mrr"].sum())
